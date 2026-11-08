@@ -690,8 +690,11 @@
 
       const apiUrl = localStorage.getItem('gst_sheet_api_url');
       try {
-        // Using GET request for deletion to completely prevent POST fallback bugs
-        const res = await fetch(`${apiUrl}?action=delete&invoiceNo=${encodeURIComponent(invoiceNo)}`);
+        // Send POST request with action=delete in URL parameters
+        const res = await fetch(`${apiUrl}?action=delete&invoiceNo=${encodeURIComponent(invoiceNo)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+        });
         const result = await res.json();
         
         if (result.status === 'success') {
