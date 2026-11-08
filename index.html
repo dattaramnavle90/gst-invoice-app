@@ -8,7 +8,6 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>GST Invoice Pro</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Include jsPDF for standard GST invoice generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     body { -webkit-tap-highlight-color: transparent; font-family: system-ui, -apple-system, sans-serif; }
@@ -49,7 +48,10 @@
   <!-- ==================== TAB 1: NEW INVOICE ==================== -->
   <main id="view-entry" class="p-4 max-w-lg mx-auto space-y-4">
     <section class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
-      <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Invoice & Party Details</h2>
+      <div class="flex justify-between items-center">
+        <h2 id="formTitle" class="text-xs font-bold uppercase tracking-wider text-slate-400">New Invoice Details</h2>
+        <button id="cancelEditBtn" onclick="resetForm()" class="hidden text-xs text-red-500 font-bold">Cancel Edit</button>
+      </div>
       
       <div class="grid grid-cols-2 gap-3">
         <div>
@@ -143,7 +145,7 @@
     </div>
   </main>
 
-  <!-- ==================== TAB 3: INVOICES LIST & PDF ==================== -->
+  <!-- ==================== TAB 3: INVOICES LIST & ACTIONS ==================== -->
   <main id="view-invoices" class="hidden p-4 max-w-lg mx-auto space-y-3">
     <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 space-y-2">
       <input id="invoiceSearch" type="text" oninput="filterInvoices()" placeholder="🔍 Search invoice no, party, or GSTIN..."
@@ -260,12 +262,10 @@
         const res = await fetch(`${apiUrl}?type=customers`);
         savedCustomers = await res.json();
         
-        // Populate dropdown in New Invoice tab
         const select = document.getElementById('customerSelect');
         select.innerHTML = '<option value="">-- Select from Customer Master --</option>' + 
           savedCustomers.map((c, i) => `<option value="${i}">${c.companyName} (${c.gstin || 'No GSTIN'})</option>`).join('');
 
-        // Populate list in Customers tab
         const listContainer = document.getElementById('customersListContainer');
         if (savedCustomers.length === 0) {
           listContainer.innerHTML = `<p class="text-xs text-slate-400 py-3 text-center">No customers saved yet.</p>`;
@@ -339,7 +339,7 @@
       }
     }
 
-    // ==================== INVOICE ENTRY LOGIC ====================
+    // ==================== INVOICE ENTRY & EDIT LOGIC ====================
     function renderItems() {
       const container = document.getElementById('itemsContainer');
       container.innerHTML = '';
@@ -453,6 +453,44 @@
       return { totTaxable, totGst, totGrand };
     }
 
+    function resetForm() {
+      document.getElementById('invNo').value = '';
+      document.getElementById('invNo').disabled = false;
+      document.getElementById('invDate').valueAsDate = new Date();
+      document.getElementById('partyName').value = '';
+      document.getElementById('gstin').value = '';
+      document.getElementById('customerSelect').value = '';
+      document.getElementById('formTitle').innerText = 'New Invoice Details';
+      document.getElementById('cancelEditBtn').classList.add('hidden');
+      document.getElementById('submitBtn').innerText = 'Submit Invoice to Sheet';
+      items = [{ hsn: '', unitPrice: '', qty: 1, gstPercent: 18 }];
+      renderItems();
+    }
+
+    function editInvoice(invNo) {
+      const inv = allInvoices.find(i => i.invoiceNo === invNo);
+      if (!inv) return;
+
+      document.getElementById('invNo').value = inv.invoiceNo;
+      document.getElementById('invNo').disabled = true; // Prevent changing primary key ID
+      document.getElementById('invDate').value = inv.date;
+      document.getElementById('partyName').value = inv.partyName;
+      document.getElementById('gstin').value = inv.gstin;
+
+      items = inv.items.map(it => ({
+        hsn: it.hsn,
+        unitPrice: it.unitPrice,
+        qty: it.qty,
+        gstPercent: it.gstPercent
+      }));
+
+      document.getElementById('formTitle').innerText = `Editing Invoice: ${inv.invoiceNo}`;
+      document.getElementById('cancelEditBtn').classList.remove('hidden');
+      document.getElementById('submitBtn').innerText = 'Update Invoice in Sheet';
+      renderItems();
+      switchTab('entry');
+    }
+
     async function submitInvoice() {
       const apiUrl = localStorage.getItem('gst_sheet_api_url');
       if (!apiUrl) {
@@ -510,25 +548,20 @@
         if (result.status === 'success') {
           status.className = 'text-center text-sm font-bold text-emerald-600';
           status.innerText = `✅ Invoice ${invoiceNo} saved successfully!`;
-          document.getElementById('invNo').value = '';
-          document.getElementById('partyName').value = '';
-          document.getElementById('gstin').value = '';
-          document.getElementById('customerSelect').value = '';
-          items = [{ hsn: '', unitPrice: '', qty: 1, gstPercent: 18 }];
-          renderItems();
+          resetForm();
         } else {
           throw new Error(result.message || 'Unknown error');
         }
       } catch (err) {
         status.className = 'text-center text-sm font-bold text-red-600';
-        status.innerText = '❌ Error saving invoice: ' + err.message;
+        status.innerText = '❌ Error: ' + err.message;
       } finally {
         btn.disabled = false;
         btn.innerText = 'Submit Invoice to Sheet';
       }
     }
 
-    // ==================== INVOICES TAB & PDF GENERATION ====================
+    // ==================== INVOICES TAB & DELETE/EDIT ACTIONS ====================
     async function loadInvoices() {
       const apiUrl = localStorage.getItem('gst_sheet_api_url');
       if (!apiUrl) return;
@@ -598,12 +631,13 @@
       }
 
       container.innerHTML = list.map((inv, idx) => {
-        const itemsRows = inv.items.map(it => `
+        const itemsList = Array.isArray(inv.items) ? inv.items : [];
+        const itemsRows = itemsList.map(it => `
           <tr class="border-t border-slate-100 text-xs">
-            <td class="py-1.5 font-medium">${it.hsn}</td>
-            <td class="py-1.5 text-right">${it.qty} × ₹${it.unitPrice.toFixed(2)}</td>
-            <td class="py-1.5 text-right">${it.gstPercent}%</td>
-            <td class="py-1.5 text-right font-semibold">₹${it.afterTax.toFixed(2)}</td>
+            <td class="py-1.5 font-medium">${it.hsn || 'N/A'}</td>
+            <td class="py-1.5 text-right">${it.qty || 0} × ₹${(it.unitPrice || 0).toFixed(2)}</td>
+            <td class="py-1.5 text-right">${it.gstPercent || 0}%</td>
+            <td class="py-1.5 text-right font-semibold">₹${(it.afterTax || 0).toFixed(2)}</td>
           </tr>
         `).join('');
 
@@ -637,14 +671,16 @@
                 </thead>
                 <tbody>${itemsRows}</tbody>
               </table>
-              <div class="border-t border-slate-200 pt-2 flex justify-between items-center text-xs">
+              <div class="border-t border-slate-200 pt-2 flex flex-wrap justify-between items-center text-xs gap-2">
                 <div>
                   <span>Taxable: <b>₹${inv.totalTaxable.toFixed(2)}</b></span><br/>
                   <span>Total GST: <b>₹${inv.totalGst.toFixed(2)}</b></span>
                 </div>
-                <button onclick='generatePdf(${JSON.stringify(inv)})' class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-bold text-xs shadow">
-                  📥 Download PDF
-                </button>
+                <div class="flex gap-2">
+                  <button onclick='generatePdf(${JSON.stringify(inv)})' class="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-lg font-bold text-xs shadow">PDF</button>
+                  <button onclick="editInvoice('${inv.invoiceNo}')" class="bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1.5 rounded-lg font-bold text-xs shadow">Edit</button>
+                  <button onclick="deleteInvoice('${inv.invoiceNo}')" class="bg-red-600 hover:bg-red-700 text-white px-2.5 py-1.5 rounded-lg font-bold text-xs shadow">Delete</button>
+                </div>
               </div>
             </div>
           </div>
@@ -652,12 +688,33 @@
       }).join('');
     }
 
+    async function deleteInvoice(invoiceNo) {
+      if (!confirm(`Are you sure you want to delete Invoice ${invoiceNo}?`)) return;
+
+      const apiUrl = localStorage.getItem('gst_sheet_api_url');
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'deleteInvoice', invoiceNo })
+        });
+        const result = await res.json();
+        if (result.status === 'success') {
+          alert(`Invoice ${invoiceNo} deleted successfully.`);
+          loadInvoices();
+        } else {
+          throw new Error(result.message);
+        }
+      } catch (err) {
+        alert('Failed to delete invoice: ' + err.message);
+      }
+    }
+
     // Standard GST Tax Invoice PDF Generator using jsPDF
     function generatePdf(inv) {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
 
-      // Header
       doc.setFont("helvetica", "bold");
       doc.setFontSize(18);
       doc.text("TAX INVOICE", 105, 15, { align: "center" });
@@ -670,60 +727,55 @@
       doc.text(`Invoice No: ${inv.invoiceNo}`, 140, 25);
       doc.text(`Date: ${inv.date}`, 140, 30);
 
-      // Line separator
       doc.setLineWidth(0.5);
       doc.line(14, 42, 196, 42);
 
-      // Bill To
       doc.setFont("helvetica", "bold");
       doc.text("Details of Receiver (Billed To):", 14, 48);
       doc.setFont("helvetica", "normal");
       doc.text(`Company Name: ${inv.partyName}`, 14, 54);
       doc.text(`GSTIN: ${inv.gstin || 'N/A'}`, 14, 60);
 
-      // Table Header
       let y = 72;
-      doc.setFillColor(30, 58, 138); // Dark blue header
+      doc.setFillColor(30, 58, 138);
       doc.rect(14, y, 182, 8, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
-      doc.text("#", 17, y + 55);
-      doc.text("HSN", 28, y + 55);
-      doc.text("Qty", 60, y + 55);
-      doc.text("Price", 85, y + 55);
-      doc.text("Taxable", 115, y + 55);
-      doc.text("GST%", 145, y + 55);
-      doc.text("Total", 170, y + 55);
+      doc.text("#", 17, y + 5.5);
+      doc.text("HSN", 28, y + 5.5);
+      doc.text("Qty", 60, y + 5.5);
+      doc.text("Price", 85, y + 5.5);
+      doc.text("Taxable", 115, y + 5.5);
+      doc.text("GST%", 145, y + 5.5);
+      doc.text("Total", 170, y + 5.5);
 
-      // Table Rows
       y += 8;
       doc.setTextColor(0, 0, 0);
       doc.setFont("helvetica", "normal");
 
-      inv.items.forEach((it, i) => {
+      const itemsList = Array.isArray(inv.items) ? inv.items : [];
+      itemsList.forEach((it, i) => {
         doc.text(String(i + 1), 17, y + 5);
-        doc.text(String(it.hsn), 28, y + 5);
-        doc.text(String(it.qty), 60, y + 5);
-        doc.text(`₹${it.unitPrice.toFixed(2)}`, 85, y + 5);
-        doc.text(`₹${it.taxable.toFixed(2)}`, 115, y + 5);
-        doc.text(`${it.gstPercent}%`, 145, y + 5);
-        doc.text(`₹${it.afterTax.toFixed(2)}`, 170, y + 5);
+        doc.text(String(it.hsn || 'N/A'), 28, y + 5);
+        doc.text(String(it.qty || 0), 60, y + 5);
+        doc.text(`₹${(it.unitPrice || 0).toFixed(2)}`, 85, y + 5);
+        doc.text(`₹${(it.taxable || 0).toFixed(2)}`, 115, y + 5);
+        doc.text(`${it.gstPercent || 0}%`, 145, y + 5);
+        doc.text(`₹${(it.afterTax || 0).toFixed(2)}`, 170, y + 5);
         y += 8;
       });
 
-      // Totals Box
       y += 5;
       doc.line(14, y, 196, y);
       y += 6;
-      doc.text(`Total Taxable Amount: ₹${inv.totalTaxable.toFixed(2)}`, 130, y);
+      doc.text(`Total Taxable Amount: ₹${(inv.totalTaxable || 0).toFixed(2)}`, 130, y);
       y += 6;
-      doc.text(`Total GST Amount: ₹${inv.totalGst.toFixed(2)}`, 130, y);
+      doc.text(`Total GST Amount: ₹${(inv.totalGst || 0).toFixed(2)}`, 130, y);
       y += 6;
       doc.setFont("helvetica", "bold");
-      doc.text(`Grand Total: ₹${inv.grandTotal.toFixed(2)}`, 130, y);
+      doc.text(`Grand Total: ₹${(inv.grandTotal || 0).toFixed(2)}`, 130, y);
 
-      // Save PDF
       doc.save(`Invoice_${inv.invoiceNo}.pdf`);
     }
 
