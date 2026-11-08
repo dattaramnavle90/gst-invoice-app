@@ -470,7 +470,7 @@
       if (!inv) return;
 
       document.getElementById('invNo').value = inv.invoiceNo;
-      document.getElementById('invNo').disabled = true;
+      document.getElementById('invNo').disabled = false; // Allow editing invoice no if needed, or keep locked
       document.getElementById('invDate').value = inv.date;
       document.getElementById('partyName').value = inv.partyName;
       document.getElementById('gstin').value = inv.gstin;
@@ -521,14 +521,12 @@
         };
       });
 
-      let isEditing = document.getElementById('invNo').disabled;
       const payload = {
         invoiceNo, date, partyName, gstin,
         totalTaxable: Number(totals.totTaxable.toFixed(2)),
         totalGst: Number(totals.totGst.toFixed(2)),
         grandTotal: Number(totals.totGrand.toFixed(2)),
-        items: formattedItems,
-        isEdit: isEditing
+        items: formattedItems
       };
 
       const btn = document.getElementById('submitBtn');
@@ -700,12 +698,6 @@
         const result = await res.json();
         if (result.status === 'success') {
           alert(`Invoice ${invoiceNo} deleted successfully.`);
-          
-          const currentEditingNo = document.getElementById('invNo').value;
-          if (currentEditingNo === invoiceNo) {
-            resetForm();
-          }
-
           loadInvoices();
         } else {
           throw new Error(result.message);
