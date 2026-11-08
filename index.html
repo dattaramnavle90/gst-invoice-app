@@ -192,7 +192,7 @@
   </div>
 
   <script>
-    let items = [{ hsn: '', unitPrice: '', qty: 1, gstPercent: 18 }];
+    let items = [{ hsn: '', itemName: '', unitPrice: '', qty: 1, gstPercent: 18 }];
     let allInvoices = [];
     let savedCustomers = [];
     const GST_RATES = [0, 5, 12, 18, 28];
@@ -303,7 +303,7 @@
         const afterTax = taxable + gstAmt;
 
         const rateButtons = GST_RATES.map(rate => `
-          <button type="button" onclick="updateItem(${idx}, 'gstPercent', ${rate})"
+          <button type="button" onclick="setGstRate(${idx}, ${rate})"
             class="flex-1 py-1.5 text-xs font-bold rounded-lg border ${item.gstPercent === rate ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-300'}">
             ${rate}%
           </button>
@@ -312,16 +312,36 @@
         container.innerHTML += `
           <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
             <div class="flex justify-between items-center"><span class="text-xs font-bold uppercase text-blue-700">Item #${idx + 1}</span>${items.length > 1 ? `<button onclick="removeItem(${idx})" class="text-xs text-red-500 font-semibold">Remove</button>` : ''}</div>
-            <div class="grid grid-cols-3 gap-2">
-              <input type="text" value="${item.hsn}" oninput="updateItem(${idx}, 'hsn', this.value)" placeholder="HSN" class="w-full p-2 border rounded-lg text-sm" />
-              <input type="number" step="0.01" value="${item.unitPrice}" oninput="updateItem(${idx}, 'unitPrice', this.value)" placeholder="Price" class="w-full p-2 border rounded-lg text-sm" />
-              <input type="number" value="${item.qty}" oninput="updateItem(${idx}, 'qty', this.value)" placeholder="Qty" class="w-full p-2 border rounded-lg text-sm" />
+            
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Item Name / Description</label>
+              <input type="text" value="${item.itemName || ''}" oninput="items[${idx}].itemName = this.value" placeholder="e.g. Consulting Services / Product X" class="w-full p-2 border rounded-lg text-sm" />
             </div>
-            <div class="flex gap-1.5">${rateButtons}</div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">HSN Code</label>
+                <input type="text" value="${item.hsn || ''}" oninput="items[${idx}].hsn = this.value" placeholder="8471" class="w-full p-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">Unit Price</label>
+                <input type="number" step="0.01" value="${item.unitPrice || ''}" oninput="items[${idx}].unitPrice = this.value; updateCalculations(${idx})" placeholder="0.00" class="w-full p-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">Qty</label>
+                <input type="number" value="${item.qty || 1}" oninput="items[${idx}].qty = this.value; updateCalculations(${idx})" placeholder="1" class="w-full p-2 border rounded-lg text-sm" />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Select GST %</label>
+              <div class="flex gap-1.5">${rateButtons}</div>
+            </div>
+
             <div class="bg-slate-50 p-2.5 rounded-lg border grid grid-cols-3 text-center text-xs">
-              <div>Taxable: <b>₹${taxable.toFixed(2)}</b></div>
-              <div>GST: <b>₹${gstAmt.toFixed(2)}</b></div>
-              <div>Total: <b>₹${afterTax.toFixed(2)}</b></div>
+              <div>Taxable: <b id="calc-taxable-${idx}">₹${taxable.toFixed(2)}</b></div>
+              <div>GST: <b id="calc-gst-${idx}">₹${gstAmt.toFixed(2)}</b></div>
+              <div>Total: <b id="calc-total-${idx}">₹${afterTax.toFixed(2)}</b></div>
             </div>
           </div>
         `;
@@ -329,11 +349,27 @@
       recalculateTotals();
     }
 
-    function updateItem(idx, field, val) {
-      items[idx][field] = val;
+    // Direct targeted updates without re-rendering the DOM elements (fixes mobile keyboard closing issue)
+    function updateCalculations(idx) {
+      const item = items[idx];
+      const price = parseFloat(item.unitPrice) || 0;
+      const qty = parseFloat(item.qty) || 0;
+      const taxable = price * qty;
+      const gstAmt = taxable * (item.gstPercent / 100);
+      const afterTax = taxable + gstAmt;
+
+      document.getElementById(`calc-taxable-${idx}`).innerText = `₹${taxable.toFixed(2)}`;
+      document.getElementById(`calc-gst-${idx}`).innerText = `₹${gstAmt.toFixed(2)}`;
+      document.getElementById(`calc-total-${idx}`).innerText = `₹${afterTax.toFixed(2)}`;
+      recalculateTotals();
+    }
+
+    function setGstRate(idx, rate) {
+      items[idx].gstPercent = rate;
       renderItems();
     }
-    function addItem() { items.push({ hsn: '', unitPrice: '', qty: 1, gstPercent: 18 }); renderItems(); }
+
+    function addItem() { items.push({ hsn: '', itemName: '', unitPrice: '', qty: 1, gstPercent: 18 }); renderItems(); }
     function removeItem(idx) { items.splice(idx, 1); renderItems(); }
 
     function recalculateTotals() {
@@ -364,7 +400,7 @@
       document.getElementById('formTitle').innerText = 'New Invoice Details';
       document.getElementById('cancelEditBtn').classList.add('hidden');
       document.getElementById('submitBtn').innerText = 'Submit Invoice to Sheet';
-      items = [{ hsn: '', unitPrice: '', qty: 1, gstPercent: 18 }];
+      items = [{ hsn: '', itemName: '', unitPrice: '', qty: 1, gstPercent: 18 }];
       renderItems();
     }
 
@@ -380,7 +416,7 @@
       document.getElementById('gstin').disabled = true;
       document.getElementById('customerSelect').disabled = true;
 
-      items = inv.items.map(it => ({ hsn: it.hsn, unitPrice: it.unitPrice, qty: it.qty, gstPercent: it.gstPercent }));
+      items = inv.items.map(it => ({ hsn: it.hsn, itemName: it.itemName || '', unitPrice: it.unitPrice, qty: it.qty, gstPercent: it.gstPercent }));
       document.getElementById('formTitle').innerText = `Editing Invoice: ${inv.invoiceNo} (Customer Locked)`;
       document.getElementById('cancelEditBtn').classList.remove('hidden');
       document.getElementById('submitBtn').innerText = 'Update Invoice in Sheet';
@@ -404,7 +440,7 @@
         totalGst: Number(totals.totGst.toFixed(2)),
         grandTotal: Number(totals.totGrand.toFixed(2)),
         items: items.map(it => ({
-          hsn: it.hsn || 'N/A', unitPrice: parseFloat(it.unitPrice) || 0, qty: parseFloat(it.qty) || 0,
+          hsn: it.hsn || 'N/A', itemName: it.itemName || '', unitPrice: parseFloat(it.unitPrice) || 0, qty: parseFloat(it.qty) || 0,
           gstPercent: it.gstPercent, taxable: Number(((it.unitPrice||0)*(it.qty||0)).toFixed(2)),
           gstAmount: Number(((it.unitPrice||0)*(it.qty||0)*(it.gstPercent/100)).toFixed(2)),
           afterTax: Number(((it.unitPrice||0)*(it.qty||0)*(1 + it.gstPercent/100)).toFixed(2))
@@ -510,14 +546,14 @@
       let y = 60;
       doc.setFillColor(30, 58, 138); doc.rect(14, y, 182, 8, "F");
       doc.setTextColor(255, 255, 255);
-      doc.text("#", 17, y + 5.5); doc.text("HSN", 28, y + 5.5); doc.text("Qty", 60, y + 5.5); doc.text("Price", 85, y + 5.5); doc.text("Total", 170, y + 5.5);
+      doc.text("#", 17, y + 5.5); doc.text("Item / Description", 28, y + 5.5); doc.text("Qty", 110, y + 5.5); doc.text("Price", 130, y + 5.5); doc.text("Total", 170, y + 5.5);
 
       y += 8; doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "normal");
       (inv.items || []).forEach((it, i) => {
         doc.text(String(i + 1), 17, y + 5);
-        doc.text(String(it.hsn || 'N/A'), 28, y + 5);
-        doc.text(String(it.qty || 0), 60, y + 5);
-        doc.text(`₹${(it.unitPrice || 0).toFixed(2)}`, 85, y + 5);
+        doc.text(String(it.itemName || it.hsn || 'Item'), 28, y + 5);
+        doc.text(String(it.qty || 0), 110, y + 5);
+        doc.text(`₹${(it.unitPrice || 0).toFixed(2)}`, 130, y + 5);
         doc.text(`₹${(it.afterTax || 0).toFixed(2)}`, 170, y + 5);
         y += 8;
       });
