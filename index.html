@@ -8,6 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>GST Invoice Pro</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Include jsPDF for standard GST invoice generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     body { -webkit-tap-highlight-color: transparent; font-family: system-ui, -apple-system, sans-serif; }
@@ -472,7 +473,7 @@
       if (!inv) return;
 
       document.getElementById('invNo').value = inv.invoiceNo;
-      document.getElementById('invNo').disabled = true; // Prevent changing primary key ID
+      document.getElementById('invNo').disabled = true;
       document.getElementById('invDate').value = inv.date;
       document.getElementById('partyName').value = inv.partyName;
       document.getElementById('gstin').value = inv.gstin;
@@ -523,12 +524,14 @@
         };
       });
 
+      let isEditing = document.getElementById('invNo').disabled;
       const payload = {
         invoiceNo, date, partyName, gstin,
         totalTaxable: Number(totals.totTaxable.toFixed(2)),
         totalGst: Number(totals.totGst.toFixed(2)),
         grandTotal: Number(totals.totGrand.toFixed(2)),
-        items: formattedItems
+        items: formattedItems,
+        isEdit: isEditing
       };
 
       const btn = document.getElementById('submitBtn');
