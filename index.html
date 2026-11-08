@@ -265,18 +265,24 @@
   </main>
 
   <!-- TAB 5: REPORTS -->
-  <main id="view-reports" class="hidden p-4 max-w-2xl mx-auto space-y-4">
-    <div class="flex flex-col sm:flex-row justify-between items-center gap-2 bg-white p-3 rounded-xl shadow-sm border border-slate-200">
-      <div class="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-lg w-full sm:w-auto">
-        <button onclick="loadReport('hsn')" id="rep-btn-hsn" class="py-2 px-4 text-xs font-bold rounded-md bg-white text-blue-700 shadow-sm">HSN Wise</button>
-        <button onclick="loadReport('month')" id="rep-btn-month" class="py-2 px-4 text-xs font-bold rounded-md text-slate-600">Month Wise</button>
-        <button onclick="loadReport('quarter')" id="rep-btn-quarter" class="py-2 px-4 text-xs font-bold rounded-md text-slate-600">Quarter Wise</button>
+  <main id="view-reports" class="hidden p-4 max-w-4xl mx-auto space-y-4">
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+      <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+        <div class="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-lg w-full sm:w-auto">
+          <button onclick="loadReport('hsn')" id="rep-btn-hsn" class="py-2 px-4 text-xs font-bold rounded-md bg-white text-blue-700 shadow-sm">HSN Wise</button>
+          <button onclick="loadReport('month')" id="rep-btn-month" class="py-2 px-4 text-xs font-bold rounded-md text-slate-600">Month Wise</button>
+          <button onclick="loadReport('quarter')" id="rep-btn-quarter" class="py-2 px-4 text-xs font-bold rounded-md text-slate-600">Quarter Wise</button>
+        </div>
+
+        <button onclick="exportReportPdf()" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-lg text-xs shadow flex items-center justify-center gap-2">
+          📥 Export Report to PDF
+        </button>
       </div>
       
-      <!-- HSN Report Year & Quarter Filters -->
-      <div id="hsnReportFilters" class="flex gap-2 w-full sm:w-auto">
-        <select id="reportFilterYear" onchange="renderReportTable()" class="p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"><option value="">All Years</option></select>
-        <select id="reportFilterQuarter" onchange="renderReportTable()" class="p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"><option value="">All Quarters</option></select>
+      <!-- Report Global Year & Quarter Filters -->
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <select id="reportFilterYear" onchange="renderReportTable()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"><option value="">All Years</option></select>
+        <select id="reportFilterQuarter" onchange="renderReportTable()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"><option value="">All Quarters</option></select>
       </div>
     </div>
 
@@ -679,7 +685,7 @@
       document.getElementById('filterQuarter').innerHTML = '<option value="">All Quarters</option>' + quarters.map(q => `<option value="${q}">${q}</option>`).join('');
       document.getElementById('filterMonth').innerHTML = '<option value="">All Months</option>' + months.map(m => `<option value="${m}">${m}</option>`).join('');
 
-      // Also populate report filter dropdowns
+      // Also populate report global filter dropdowns
       document.getElementById('reportFilterYear').innerHTML = '<option value="">All Years</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
       document.getElementById('reportFilterQuarter').innerHTML = '<option value="">All Quarters</option>' + quarters.map(q => `<option value="${q}">${q}</option>`).join('');
     }
@@ -841,12 +847,6 @@
         }
       });
 
-      // Show/hide Year and Quarter filter dropdowns for HSN report
-      const filtersEl = document.getElementById('hsnReportFilters');
-      if (filtersEl) {
-        filtersEl.style.display = (type === 'hsn') ? 'flex' : 'none';
-      }
-
       const apiUrl = localStorage.getItem('gst_sheet_api_url');
       if (!apiUrl) return;
       
@@ -855,7 +855,6 @@
         const res = await fetch(`${apiUrl}?type=${type}`);
         currentReportRawData = await res.json();
         
-        // If we also need invoices loaded for HSN client-side filtering by Year & Quarter
         if (allInvoices.length === 0) {
           const invRes = await fetch(`${apiUrl}?type=invoices`);
           allInvoices = await invRes.json();
@@ -874,41 +873,235 @@
       const type = currentReportType;
       const headEl = document.getElementById('reportTableHead');
       const bodyEl = document.getElementById('reportTableBody');
+      const yr = document.getElementById('reportFilterYear').value;
+      const qtr = document.getElementById('reportFilterQuarter').value;
+
+      const filteredInv = allInvoices.filter(inv => (!yr || inv.year === yr) && (!qtr || inv.quarter === qtr));
 
       if (type === 'hsn') {
-        headEl.innerHTML = `<th class="p-3">HSN</th><th class="p-3 text-right">Qty</th><th class="p-3 text-right">Total Taxable / Amount</th>`;
+        headEl.innerHTML = `<th class="p-3">HSN Code</th><th class="p-3 text-right">Rate / Item</th><th class="p-3 text-right">Quantity</th><th class="p-3 text-center">TAX Rate</th><th class="p-3 text-right">CGST</th><th class="p-3 text-right">SGST</th><th class="p-3 text-right">Total</th>`;
         
-        const yr = document.getElementById('reportFilterYear').value;
-        const qtr = document.getElementById('reportFilterQuarter').value;
+        let hsnMap = {};
+        filteredInv.forEach(inv => {
+          (inv.items || []).forEach(it => {
+            let hsnKey = String(it.hsn || '4569').trim();
+            let rateKey = Number(it.unitPrice || 0);
+            let taxRate = Number(it.gstPercent || 18);
+            let mapKey = `${hsnKey}_${rateKey}_${taxRate}`;
 
-        // If Year or Quarter filter is selected, aggregate HSN dynamically from filtered invoices
-        if (yr || qtr) {
-          const filteredInv = allInvoices.filter(inv => (!yr || inv.year === yr) && (!qtr || inv.quarter === qtr));
-          let hsnMap = {};
-          filteredInv.forEach(inv => {
-            (inv.items || []).forEach(it => {
-              let hsnKey = it.hsn || '4569';
-              if (!hsnMap[hsnKey]) {
-                hsnMap[hsnKey] = { qty: 0, total: 0 };
-              }
-              hsnMap[hsnKey].qty += Number(it.qty || 0);
-              hsnMap[hsnKey].total += Number(it.taxable || ((it.unitPrice || 0) * (it.qty || 0)));
-            });
+            if (!hsnMap[mapKey]) {
+              hsnMap[mapKey] = { hsn: hsnKey, unitPrice: rateKey, qty: 0, gstPercent: taxRate, taxable: 0, gstAmt: 0, total: 0 };
+            }
+            let qty = Number(it.qty || 0);
+            let taxable = Number(it.taxable || (rateKey * qty));
+            let gstAmt = Number(it.gstAmount || (taxable * (taxRate / 100)));
+            let total = Number(it.afterTax || (taxable + gstAmt));
+
+            hsnMap[mapKey].qty += qty;
+            hsnMap[mapKey].taxable += taxable;
+            hsnMap[mapKey].gstAmt += gstAmt;
+            hsnMap[mapKey].total += total;
           });
+        });
 
-          let rows = Object.keys(hsnMap).map(hsn => ({ label: hsn, qty: hsnMap[hsn].qty, total: hsnMap[hsn].total }));
-          bodyEl.innerHTML = rows.length === 0 ? `<tr><td colspan="3" class="p-6 text-center text-slate-400">No records found for selected filters.</td></tr>` :
-            rows.map(r => `<tr class="hover:bg-slate-50"><td class="p-3 font-bold">${r.label}</td><td class="p-3 text-right">${r.qty}</td><td class="p-3 text-right font-bold text-emerald-700">Rs. ${Number(r.total).toFixed(2)}</td></tr>`).join('');
-        } else {
-          // Default server-fetched HSN summary
-          bodyEl.innerHTML = currentReportRawData.length === 0 ? `<tr><td colspan="3" class="p-6 text-center text-slate-400">No records.</td></tr>` :
-            currentReportRawData.map(r => `<tr class="hover:bg-slate-50"><td class="p-3 font-bold">${r.label}</td><td class="p-3 text-right">${r.qty}</td><td class="p-3 text-right font-bold text-emerald-700">Rs. ${Number(r.total).toFixed(2)}</td></tr>`).join('');
-        }
+        let rows = Object.values(hsnMap);
+        bodyEl.innerHTML = rows.length === 0 ? `<tr><td colspan="7" class="p-6 text-center text-slate-400">No records found for selected filters.</td></tr>` :
+          rows.map(r => {
+            let halfGst = (r.gstAmt / 2);
+            return `<tr class="hover:bg-slate-50">
+              <td class="p-3 font-bold">${r.hsn}</td>
+              <td class="p-3 text-right">Rs. ${r.unitPrice.toFixed(2)}</td>
+              <td class="p-3 text-right">${r.qty}</td>
+              <td class="p-3 text-center">${r.gstPercent}%</td>
+              <td class="p-3 text-right">Rs. ${halfGst.toFixed(2)}</td>
+              <td class="p-3 text-right">Rs. ${halfGst.toFixed(2)}</td>
+              <td class="p-3 text-right font-bold text-emerald-700">Rs. ${r.total.toFixed(2)}</td>
+            </tr>`;
+          }).join('');
+
+      } else if (type === 'quarter') {
+        headEl.innerHTML = `<th class="p-3">Quarter</th><th class="p-3 text-center">No. of Invoices</th><th class="p-3 text-right">Taxable Amount</th><th class="p-3 text-right">CGST</th><th class="p-3 text-right">SGST</th><th class="p-3 text-right">Final Amount</th>`;
+
+        let qtrMap = {};
+        filteredInv.forEach(inv => {
+          let qKey = inv.quarter || 'Q1';
+          if (!qtrMap[qKey]) {
+            qtrMap[qKey] = { invoices: new Set(), taxable: 0, gst: 0, grand: 0 };
+          }
+          qtrMap[qKey].invoices.add(inv.invoiceNo);
+          qtrMap[qKey].taxable += Number(inv.totalTaxable || 0);
+          qtrMap[qKey].gst += Number(inv.totalGst || 0);
+          qtrMap[qKey].grand += Number(inv.grandTotal || 0);
+        });
+
+        let rows = Object.keys(qtrMap).sort().map(q => ({
+          quarter: q,
+          invoiceCount: qtrMap[q].invoices.size,
+          taxable: qtrMap[q].taxable,
+          cgst: qtrMap[q].gst / 2,
+          sgst: qtrMap[q].gst / 2,
+          finalAmount: qtrMap[q].grand
+        }));
+
+        bodyEl.innerHTML = rows.length === 0 ? `<tr><td colspan="6" class="p-6 text-center text-slate-400">No records found for selected filters.</td></tr>` :
+          rows.map(r => `<tr class="hover:bg-slate-50">
+            <td class="p-3 font-bold">${r.quarter}</td>
+            <td class="p-3 text-center font-semibold">${r.invoiceCount}</td>
+            <td class="p-3 text-right">Rs. ${r.taxable.toFixed(2)}</td>
+            <td class="p-3 text-right">Rs. ${r.cgst.toFixed(2)}</td>
+            <td class="p-3 text-right">Rs. ${r.sgst.toFixed(2)}</td>
+            <td class="p-3 text-right font-bold text-emerald-700">Rs. ${r.finalAmount.toFixed(2)}</td>
+          </tr>`).join('');
+
       } else {
-        headEl.innerHTML = `<th class="p-3">${type.toUpperCase()}</th><th class="p-3 text-right">Total</th>`;
-        bodyEl.innerHTML = currentReportRawData.length === 0 ? `<tr><td colspan="3" class="p-6 text-center text-slate-400">No records.</td></tr>` :
-          currentReportRawData.map(r => `<tr class="hover:bg-slate-50"><td class="p-3 font-bold">${r.label}</td><td class="p-3 text-right font-bold text-emerald-700">Rs. ${Number(r.total).toFixed(2)}</td></tr>`).join('');
+        // Month wise report
+        headEl.innerHTML = `<th class="p-3">Month</th><th class="p-3 text-center">No. of Invoices</th><th class="p-3 text-right">Taxable Amount</th><th class="p-3 text-right">CGST</th><th class="p-3 text-right">SGST</th><th class="p-3 text-right">Final Amount</th>`;
+
+        let monMap = {};
+        filteredInv.forEach(inv => {
+          let mKey = inv.month || 'Jan';
+          if (!monMap[mKey]) {
+            monMap[mKey] = { invoices: new Set(), taxable: 0, gst: 0, grand: 0 };
+          }
+          monMap[mKey].invoices.add(inv.invoiceNo);
+          monMap[mKey].taxable += Number(inv.totalTaxable || 0);
+          monMap[mKey].gst += Number(inv.totalGst || 0);
+          monMap[mKey].grand += Number(inv.grandTotal || 0);
+        });
+
+        let rows = Object.keys(monMap).map(m => ({
+          month: m,
+          invoiceCount: monMap[m].invoices.size,
+          taxable: monMap[m].taxable,
+          cgst: monMap[m].gst / 2,
+          sgst: monMap[m].gst / 2,
+          finalAmount: monMap[m].grand
+        }));
+
+        bodyEl.innerHTML = rows.length === 0 ? `<tr><td colspan="6" class="p-6 text-center text-slate-400">No records found for selected filters.</td></tr>` :
+          rows.map(r => `<tr class="hover:bg-slate-50">
+            <td class="p-3 font-bold">${r.month}</td>
+            <td class="p-3 text-center font-semibold">${r.invoiceCount}</td>
+            <td class="p-3 text-right">Rs. ${r.taxable.toFixed(2)}</td>
+            <td class="p-3 text-right">Rs. ${r.cgst.toFixed(2)}</td>
+            <td class="p-3 text-right">Rs. ${r.sgst.toFixed(2)}</td>
+            <td class="p-3 text-right font-bold text-emerald-700">Rs. ${r.finalAmount.toFixed(2)}</td>
+          </tr>`).join('');
       }
+    }
+
+    // Export Current Report to PDF
+    function exportReportPdf() {
+      const vendor = getVendorProfile();
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+      const yr = document.getElementById('reportFilterYear').value || 'All Years';
+      const qtr = document.getElementById('reportFilterQuarter').value || 'All Quarters';
+
+      let title = currentReportType === 'hsn' ? 'HSN WISE GST REPORT' : currentReportType === 'quarter' ? 'QUARTER WISE GST REPORT' : 'MONTH WISE GST REPORT';
+
+      let y = 14;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text(cleanText(vendor.name), 14, y);
+      
+      doc.setFontSize(12);
+      doc.text(title, 283, y, { align: "right" });
+
+      y += 6;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(`GSTIN: ${cleanText(vendor.gstin)} | Year: ${yr} | Quarter: ${qtr} | Generated: ${formatDateClean(new Date())}`, 14, y);
+
+      y += 4;
+      doc.setLineWidth(0.4);
+      doc.line(14, y, 283, y);
+
+      let tableHeaders = [];
+      let tableRows = [];
+      const filteredInv = allInvoices.filter(inv => (!document.getElementById('reportFilterYear').value || inv.year === document.getElementById('reportFilterYear').value) && (!document.getElementById('reportFilterQuarter').value || inv.quarter === document.getElementById('reportFilterQuarter').value));
+
+      if (currentReportType === 'hsn') {
+        tableHeaders = ['#', 'HSN Code', 'Rate / Item', 'Quantity', 'TAX Rate', 'CGST Tax', 'SGST Tax', 'Total Amount'];
+        let hsnMap = {};
+        filteredInv.forEach(inv => {
+          (inv.items || []).forEach(it => {
+            let hsnKey = String(it.hsn || '4569').trim();
+            let rateKey = Number(it.unitPrice || 0);
+            let taxRate = Number(it.gstPercent || 18);
+            let mapKey = `${hsnKey}_${rateKey}_${taxRate}`;
+
+            if (!hsnMap[mapKey]) {
+              hsnMap[mapKey] = { hsn: hsnKey, unitPrice: rateKey, qty: 0, gstPercent: taxRate, gstAmt: 0, total: 0 };
+            }
+            let qty = Number(it.qty || 0);
+            let taxable = Number(it.taxable || (rateKey * qty));
+            let gstAmt = Number(it.gstAmount || (taxable * (taxRate / 100)));
+            let total = Number(it.afterTax || (taxable + gstAmt));
+
+            hsnMap[mapKey].qty += qty;
+            hsnMap[mapKey].gstAmt += gstAmt;
+            hsnMap[mapKey].total += total;
+          });
+        });
+
+        let idx = 1;
+        Object.values(hsnMap).forEach(r => {
+          let halfGst = (r.gstAmt / 2);
+          tableRows.push([
+            String(idx++),
+            r.hsn,
+            `Rs. ${r.unitPrice.toFixed(2)}`,
+            String(r.qty),
+            `${r.gstPercent}%`,
+            `Rs. ${halfGst.toFixed(2)}`,
+            `Rs. ${halfGst.toFixed(2)}`,
+            `Rs. ${r.total.toFixed(2)}`
+          ]);
+        });
+
+      } else {
+        const isQtr = currentReportType === 'quarter';
+        tableHeaders = ['#', isQtr ? 'Quarter' : 'Month', 'No. of Invoices', 'Taxable Amount', 'CGST', 'SGST', 'Final Amount'];
+        
+        let groupMap = {};
+        filteredInv.forEach(inv => {
+          let key = isQtr ? (inv.quarter || 'Q1') : (inv.month || 'Jan');
+          if (!groupMap[key]) {
+            groupMap[key] = { invoices: new Set(), taxable: 0, gst: 0, grand: 0 };
+          }
+          groupMap[key].invoices.add(inv.invoiceNo);
+          groupMap[key].taxable += Number(inv.totalTaxable || 0);
+          groupMap[key].gst += Number(inv.totalGst || 0);
+          groupMap[key].grand += Number(inv.grandTotal || 0);
+        });
+
+        let idx = 1;
+        Object.keys(groupMap).forEach(k => {
+          let data = groupMap[k];
+          tableRows.push([
+            String(idx++),
+            k,
+            String(data.invoices.size),
+            `Rs. ${data.taxable.toFixed(2)}`,
+            `Rs. ${(data.gst / 2).toFixed(2)}`,
+            `Rs. ${(data.gst / 2).toFixed(2)}`,
+            `Rs. ${data.grand.toFixed(2)}`
+          ]);
+        });
+      }
+
+      doc.autoTable({
+        startY: y + 6,
+        head: [tableHeaders],
+        body: tableRows,
+        theme: 'grid',
+        headStyles: { fillColor: [30, 58, 138], fontSize: 8.5, fontStyle: 'bold', halign: 'center' },
+        bodyStyles: { fontSize: 8, textColor: [30, 30, 30] }
+      });
+
+      doc.save(`GST_${currentReportType.toUpperCase()}_Report_${Date.now()}.pdf`);
+      showToast('Report PDF exported successfully!');
     }
 
     function downloadInvoicePdfByIndex(invNo) {
