@@ -7,6 +7,7 @@
   <title>GST Invoice Pro - Power Source Style</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
   <style>
     body { -webkit-tap-highlight-color: transparent; font-family: system-ui, -apple-system, sans-serif; }
     .active-tab { border-bottom: 3px solid #2563eb; color: #1d4ed8; font-weight: 700; }
@@ -236,10 +237,16 @@
   </main>
 
   <!-- TAB 4: INVOICES LIST -->
-  <main id="view-invoices" class="hidden p-4 max-w-lg mx-auto space-y-3">
-    <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 space-y-2">
-      <input id="invoiceSearch" type="text" oninput="filterInvoices()" placeholder="🔍 Search invoice no, party, or GSTIN..."
-        class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none" />
+  <main id="view-invoices" class="hidden p-4 max-w-4xl mx-auto space-y-3">
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+      <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+        <input id="invoiceSearch" type="text" oninput="filterInvoices()" placeholder="🔍 Search invoice no, party, or GSTIN..."
+          class="w-full sm:w-80 p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none" />
+        
+        <button onclick="exportFilteredInvoicesPdf()" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-lg text-xs shadow flex items-center justify-center gap-2">
+          📥 Export Appearing Invoices to PDF
+        </button>
+      </div>
       
       <div class="grid grid-cols-3 gap-2">
         <select id="filterYear" onchange="filterInvoices()" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"><option value="">All Years</option></select>
@@ -258,12 +265,21 @@
   </main>
 
   <!-- TAB 5: REPORTS -->
-  <main id="view-reports" class="hidden p-4 max-w-lg mx-auto space-y-4">
-    <div class="grid grid-cols-3 gap-2 bg-slate-200 p-1 rounded-xl">
-      <button onclick="loadReport('hsn')" id="rep-btn-hsn" class="py-2 text-xs font-bold rounded-lg bg-white text-blue-700 shadow-sm">HSN Wise</button>
-      <button onclick="loadReport('month')" id="rep-btn-month" class="py-2 text-xs font-bold rounded-lg text-slate-600">Month Wise</button>
-      <button onclick="loadReport('quarter')" id="rep-btn-quarter" class="py-2 text-xs font-bold rounded-lg text-slate-600">Quarter Wise</button>
+  <main id="view-reports" class="hidden p-4 max-w-2xl mx-auto space-y-4">
+    <div class="flex flex-col sm:flex-row justify-between items-center gap-2 bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+      <div class="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-lg w-full sm:w-auto">
+        <button onclick="loadReport('hsn')" id="rep-btn-hsn" class="py-2 px-4 text-xs font-bold rounded-md bg-white text-blue-700 shadow-sm">HSN Wise</button>
+        <button onclick="loadReport('month')" id="rep-btn-month" class="py-2 px-4 text-xs font-bold rounded-md text-slate-600">Month Wise</button>
+        <button onclick="loadReport('quarter')" id="rep-btn-quarter" class="py-2 px-4 text-xs font-bold rounded-md text-slate-600">Quarter Wise</button>
+      </div>
+      
+      <!-- HSN Report Year & Quarter Filters -->
+      <div id="hsnReportFilters" class="flex gap-2 w-full sm:w-auto">
+        <select id="reportFilterYear" onchange="renderReportTable()" class="p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"><option value="">All Years</option></select>
+        <select id="reportFilterQuarter" onchange="renderReportTable()" class="p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"><option value="">All Quarters</option></select>
+      </div>
     </div>
+
     <div id="reportLoading" class="hidden text-center py-8 text-sm text-slate-500">Fetching live data...</div>
     <div id="reportContent" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <table class="w-full text-left border-collapse">
@@ -282,7 +298,10 @@
   <script>
     let items = [{ hsn: '4569', itemName: 'Item 1', unitPrice: '125.00', qty: 10, gstPercent: 18 }];
     let allInvoices = [];
+    let filteredInvoicesCache = [];
     let savedCustomers = [];
+    let currentReportType = 'hsn';
+    let currentReportRawData = [];
     const GST_RATES = [0, 5, 12, 18, 28];
 
     window.onload = () => {
@@ -655,9 +674,14 @@
       const years = [...new Set(allInvoices.map(i => i.year))].sort().reverse();
       const quarters = [...new Set(allInvoices.map(i => i.quarter))].sort().reverse();
       const months = [...new Set(allInvoices.map(i => i.month))];
+      
       document.getElementById('filterYear').innerHTML = '<option value="">All Years</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
       document.getElementById('filterQuarter').innerHTML = '<option value="">All Quarters</option>' + quarters.map(q => `<option value="${q}">${q}</option>`).join('');
       document.getElementById('filterMonth').innerHTML = '<option value="">All Months</option>' + months.map(m => `<option value="${m}">${m}</option>`).join('');
+
+      // Also populate report filter dropdowns
+      document.getElementById('reportFilterYear').innerHTML = '<option value="">All Years</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+      document.getElementById('reportFilterQuarter').innerHTML = '<option value="">All Quarters</option>' + quarters.map(q => `<option value="${q}">${q}</option>`).join('');
     }
 
     function filterInvoices() {
@@ -666,26 +690,225 @@
       const qtr = document.getElementById('filterQuarter').value;
       const mon = document.getElementById('filterMonth').value;
 
-      const filtered = allInvoices.filter(inv => {
-        return (inv.invoiceNo.toLowerCase().includes(search) || inv.partyName.toLowerCase().includes(search)) &&
+      filteredInvoicesCache = allInvoices.filter(inv => {
+        return (inv.invoiceNo.toLowerCase().includes(search) || inv.partyName.toLowerCase().includes(search) || (inv.gstin && inv.gstin.toLowerCase().includes(search))) &&
                (!yr || inv.year === yr) && (!qtr || inv.quarter === qtr) && (!mon || inv.month === mon);
       });
 
-      document.getElementById('invoiceCountLabel').innerText = `Showing ${filtered.length} invoice(s)`;
-      document.getElementById('invoicesListContainer').innerHTML = filtered.length === 0 ? '<div class="bg-white p-6 text-center text-slate-400 text-sm rounded-xl">No invoices found.</div>' :
-        filtered.map((inv, idx) => `
-          <div class="bg-white rounded-xl shadow-sm border p-4 space-y-2">
-            <div class="flex justify-between items-start">
-              <div><span class="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded">${inv.invoiceNo}</span><span class="text-xs text-slate-400 ml-2">${formatDateClean(inv.date)}</span><h3 class="font-bold text-slate-800 mt-1">${inv.partyName}</h3></div>
-              <div class="text-right"><span class="block text-base font-bold text-emerald-700">Rs. ${Number(inv.grandTotal || 0).toFixed(2)}</span></div>
+      document.getElementById('invoiceCountLabel').innerText = `Showing ${filteredInvoicesCache.length} invoice(s)`;
+      document.getElementById('invoicesListContainer').innerHTML = filteredInvoicesCache.length === 0 ? '<div class="bg-white p-6 text-center text-slate-400 text-sm rounded-xl">No invoices found.</div>' :
+        filteredInvoicesCache.map((inv, idx) => {
+          let totalQty = (inv.items || []).reduce((acc, it) => acc + Number(it.qty || 0), 0);
+          let ratesStr = [...new Set((inv.items || []).map(it => it.gstPercent + '%'))].join(', ');
+          return `
+            <div class="bg-white rounded-xl shadow-sm border p-4 space-y-3">
+              <div class="flex flex-col sm:flex-row justify-between items-start gap-2">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded">${inv.invoiceNo}</span>
+                    <span class="text-xs text-slate-400">${formatDateClean(inv.date)}</span>
+                  </div>
+                  <h3 class="font-bold text-slate-900 mt-1 text-base">${inv.partyName}</h3>
+                  <p class="text-xs text-slate-500">GSTIN: <b class="text-slate-700">${inv.gstin || 'N/A'}</b></p>
+                </div>
+                <div class="text-right sm:text-right w-full sm:w-auto flex sm:flex-col justify-between items-center sm:items-end border-t sm:border-t-0 pt-2 sm:pt-0">
+                  <span class="text-xs text-slate-400">Grand Total</span>
+                  <span class="text-base font-bold text-emerald-700">Rs. ${Number(inv.grandTotal || 0).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-50 p-2.5 rounded-lg text-xs text-slate-600 border border-slate-100">
+                <div>Items / Qty: <b class="text-slate-800">${inv.items.length} / ${totalQty}</b></div>
+                <div>Taxable: <b class="text-slate-800">Rs. ${Number(inv.totalTaxable || 0).toFixed(2)}</b></div>
+                <div>GST Rate(s): <b class="text-slate-800">${ratesStr}</b></div>
+                <div>Total GST: <b class="text-slate-800">Rs. ${Number(inv.totalGst || 0).toFixed(2)}</b></div>
+              </div>
+
+              <div class="flex gap-2 pt-1">
+                <button onclick="downloadInvoicePdfByIndex('${inv.invoiceNo}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm">📄 Single PDF</button>
+                <button onclick="editInvoice('${inv.invoiceNo}')" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm">✏️ Edit</button>
+                <button onclick="deleteInvoice('${inv.invoiceNo}')" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm">🗑️ Delete</button>
+              </div>
             </div>
-            <div class="flex gap-2 pt-2 border-t">
-              <button onclick="downloadInvoicePdfByIndex('${inv.invoiceNo}')" class="bg-blue-600 text-white px-3 py-1 rounded font-bold text-xs">PDF</button>
-              <button onclick="editInvoice('${inv.invoiceNo}')" class="bg-amber-500 text-white px-3 py-1 rounded font-bold text-xs">Edit</button>
-              <button onclick="deleteInvoice('${inv.invoiceNo}')" class="bg-red-600 text-white px-3 py-1 rounded font-bold text-xs">Delete</button>
-            </div>
-          </div>
-        `).join('');
+          `;
+        }).join('');
+    }
+
+    // Export Appearing Invoices to PDF
+    function exportFilteredInvoicesPdf() {
+      if (!filteredInvoicesCache || filteredInvoicesCache.length === 0) {
+        showToast('No invoices to export in current view.', 'error');
+        return;
+      }
+      const vendor = getVendorProfile();
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+
+      let y = 14;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text(cleanText(vendor.name), 14, y);
+      
+      doc.setFontSize(12);
+      doc.text("GST INVOICE REPORT SUMMARY", 283, y, { align: "right" });
+
+      y += 6;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(`GSTIN: ${cleanText(vendor.gstin)} | Generated On: ${formatDateClean(new Date())}`, 14, y);
+
+      y += 4;
+      doc.setLineWidth(0.4);
+      doc.line(14, y, 283, y);
+
+      let tableRows = [];
+      let grandTaxableSum = 0;
+      let grandGstSum = 0;
+      let grandTotalSum = 0;
+
+      filteredInvoicesCache.forEach((inv, idx) => {
+        let totalQty = (inv.items || []).reduce((acc, it) => acc + Number(it.qty || 0), 0);
+        let ratesStr = [...new Set((inv.items || []).map(it => it.gstPercent + '%'))].join(', ');
+        let taxable = Number(inv.totalTaxable || 0);
+        let gst = Number(inv.totalGst || 0);
+        let total = Number(inv.grandTotal || 0);
+
+        grandTaxableSum += taxable;
+        grandGstSum += gst;
+        grandTotalSum += total;
+
+        tableRows.push([
+          String(idx + 1),
+          cleanText(inv.invoiceNo),
+          cleanText(formatDateClean(inv.date)),
+          cleanText(inv.partyName),
+          cleanText(inv.gstin || 'N/A'),
+          String(`${inv.items.length} items (${totalQty} qty)`),
+          `Rs. ${taxable.toFixed(2)}`,
+          cleanText(ratesStr),
+          `Rs. ${gst.toFixed(2)}`,
+          `Rs. ${total.toFixed(2)}`
+        ]);
+      });
+
+      tableRows.push([
+        '', '', '', 'TOTAL SUMMARY', '', '',
+        `Rs. ${grandTaxableSum.toFixed(2)}`,
+        '',
+        `Rs. ${grandGstSum.toFixed(2)}`,
+        `Rs. ${grandTotalSum.toFixed(2)}`
+      ]);
+
+      doc.autoTable({
+        startY: y + 6,
+        head: [['#', 'Invoice No.', 'Date', 'Party Name', 'Party GSTIN', 'Items / Qty', 'Taxable Amount', 'GST Rate', 'GST', 'Total Amount']],
+        body: tableRows,
+        theme: 'grid',
+        headStyles: { fillColor: [30, 58, 138], fontSize: 8.5, fontStyle: 'bold', halign: 'center' },
+        bodyStyles: { fontSize: 8, textColor: [30, 30, 30] },
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 22 },
+          3: { cellWidth: 45 },
+          4: { cellWidth: 32 },
+          5: { cellWidth: 25, halign: 'center' },
+          6: { cellWidth: 25, halign: 'right' },
+          7: { cellWidth: 20, halign: 'center' },
+          8: { cellWidth: 22, halign: 'right' },
+          9: { cellWidth: 28, halign: 'right', fontStyle: 'bold' }
+        },
+        didParseCell: function(data) {
+          if (data.row.index === tableRows.length - 1) {
+            data.cell.styles.fontStyle = 'bold';
+            data.cell.styles.fillColor = [240, 243, 246];
+          }
+        }
+      });
+
+      doc.save(`GST_Invoices_Summary_${Date.now()}.pdf`);
+      showToast('Invoices summary PDF exported successfully!');
+    }
+
+    async function loadReport(type) {
+      currentReportType = type;
+      
+      // Toggle button active states
+      ['hsn', 'month', 'quarter'].forEach(t => {
+        const btn = document.getElementById(`rep-btn-${t}`);
+        if (btn) {
+          btn.className = t === type ? 'py-2 px-4 text-xs font-bold rounded-md bg-white text-blue-700 shadow-sm' : 'py-2 px-4 text-xs font-bold rounded-md text-slate-600';
+        }
+      });
+
+      // Show/hide Year and Quarter filter dropdowns for HSN report
+      const filtersEl = document.getElementById('hsnReportFilters');
+      if (filtersEl) {
+        filtersEl.style.display = (type === 'hsn') ? 'flex' : 'none';
+      }
+
+      const apiUrl = localStorage.getItem('gst_sheet_api_url');
+      if (!apiUrl) return;
+      
+      document.getElementById('reportLoading').classList.remove('hidden');
+      try {
+        const res = await fetch(`${apiUrl}?type=${type}`);
+        currentReportRawData = await res.json();
+        
+        // If we also need invoices loaded for HSN client-side filtering by Year & Quarter
+        if (allInvoices.length === 0) {
+          const invRes = await fetch(`${apiUrl}?type=invoices`);
+          allInvoices = await invRes.json();
+          populateFilterDropdowns();
+        }
+
+        renderReportTable();
+      } catch (err) { 
+        console.error(err); 
+      } finally { 
+        document.getElementById('reportLoading').classList.add('hidden'); 
+      }
+    }
+
+    function renderReportTable() {
+      const type = currentReportType;
+      const headEl = document.getElementById('reportTableHead');
+      const bodyEl = document.getElementById('reportTableBody');
+
+      if (type === 'hsn') {
+        headEl.innerHTML = `<th class="p-3">HSN</th><th class="p-3 text-right">Qty</th><th class="p-3 text-right">Total Taxable / Amount</th>`;
+        
+        const yr = document.getElementById('reportFilterYear').value;
+        const qtr = document.getElementById('reportFilterQuarter').value;
+
+        // If Year or Quarter filter is selected, aggregate HSN dynamically from filtered invoices
+        if (yr || qtr) {
+          const filteredInv = allInvoices.filter(inv => (!yr || inv.year === yr) && (!qtr || inv.quarter === qtr));
+          let hsnMap = {};
+          filteredInv.forEach(inv => {
+            (inv.items || []).forEach(it => {
+              let hsnKey = it.hsn || '4569';
+              if (!hsnMap[hsnKey]) {
+                hsnMap[hsnKey] = { qty: 0, total: 0 };
+              }
+              hsnMap[hsnKey].qty += Number(it.qty || 0);
+              hsnMap[hsnKey].total += Number(it.taxable || ((it.unitPrice || 0) * (it.qty || 0)));
+            });
+          });
+
+          let rows = Object.keys(hsnMap).map(hsn => ({ label: hsn, qty: hsnMap[hsn].qty, total: hsnMap[hsn].total }));
+          bodyEl.innerHTML = rows.length === 0 ? `<tr><td colspan="3" class="p-6 text-center text-slate-400">No records found for selected filters.</td></tr>` :
+            rows.map(r => `<tr class="hover:bg-slate-50"><td class="p-3 font-bold">${r.label}</td><td class="p-3 text-right">${r.qty}</td><td class="p-3 text-right font-bold text-emerald-700">Rs. ${Number(r.total).toFixed(2)}</td></tr>`).join('');
+        } else {
+          // Default server-fetched HSN summary
+          bodyEl.innerHTML = currentReportRawData.length === 0 ? `<tr><td colspan="3" class="p-6 text-center text-slate-400">No records.</td></tr>` :
+            currentReportRawData.map(r => `<tr class="hover:bg-slate-50"><td class="p-3 font-bold">${r.label}</td><td class="p-3 text-right">${r.qty}</td><td class="p-3 text-right font-bold text-emerald-700">Rs. ${Number(r.total).toFixed(2)}</td></tr>`).join('');
+        }
+      } else {
+        headEl.innerHTML = `<th class="p-3">${type.toUpperCase()}</th><th class="p-3 text-right">Total</th>`;
+        bodyEl.innerHTML = currentReportRawData.length === 0 ? `<tr><td colspan="3" class="p-6 text-center text-slate-400">No records.</td></tr>` :
+          currentReportRawData.map(r => `<tr class="hover:bg-slate-50"><td class="p-3 font-bold">${r.label}</td><td class="p-3 text-right font-bold text-emerald-700">Rs. ${Number(r.total).toFixed(2)}</td></tr>`).join('');
+      }
     }
 
     function downloadInvoicePdfByIndex(invNo) {
@@ -706,7 +929,6 @@
       } catch (err) { showToast('Failed to delete: ' + err.message, 'error'); }
     }
 
-    // Number to words helper for Indian Currency
     function numberToWords(num) {
       num = Number(num);
       if (isNaN(num) || num === 0) return "INR Zero Rupees Only.";
@@ -753,12 +975,10 @@
       return result + ' Only.';
     }
 
-    // Strict Date-Only Formatter: Strips all time, timezone, or GMT strings completely
     function formatDateClean(rawDate) {
       if (!rawDate) return '';
       let str = String(rawDate).trim();
       
-      // Match YYYY-MM-DD directly
       let isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
       if (isoMatch) {
         let months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -770,7 +990,6 @@
         }
       }
 
-      // Match "Tue Apr 07 2026 00:00:00 GMT..." or similar JS Date strings
       let jsDateMatch = str.match(/^[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/);
       if (jsDateMatch) {
         let mon = jsDateMatch[1];
@@ -779,7 +998,6 @@
         return `${day} ${mon} ${yr}`;
       }
 
-      // Fallback using Date object
       let d = new Date(str);
       if (!isNaN(d.getTime())) {
         let day = String(d.getDate()).padStart(2, '0');
@@ -807,17 +1025,14 @@
       return '';
     }
 
-    // Helper to strip any accidental unicode superscripts or control characters from strings
     function cleanText(val) {
       if (val === null || val === undefined) return '';
       return String(val)
-        .replace(/[¹²³⁰-⁹]/g, '') // Remove unicode superscripts ¹²³⁰-⁹
-        .replace(/[^ -~
-]/g, '') // Ensure pure standard ASCII characters so jsPDF Helvetica never renders odd glyphs
+        .replace(/[¹²³⁰-⁹]/g, '')
+        .replace(/[^ -~\n]/g, '')
         .trim();
     }
 
-    // POWER SOURCE Style PDF Generator
     function generatePowerSourcePdf(inv) {
       const vendor = getVendorProfile();
       const { jsPDF } = window.jspdf;
@@ -825,7 +1040,6 @@
 
       let y = 14;
       
-      // Header: Power Source & GSTIN & TAX INVOICE title
       doc.setFont("helvetica", "bold");
       doc.setFontSize(14);
       doc.text(cleanText(vendor.name), 14, y);
@@ -854,7 +1068,6 @@
       doc.line(14, y, 196, y);
       
       y += 6;
-      // Left Column: Customer Details | Right Column: Invoice Metadata (Date Only - No Time)
       doc.setFont("helvetica", "bold");
       doc.text("Customer Details:", 14, y);
       
@@ -896,7 +1109,6 @@
 
       y += Math.max(splitPartyAddr.length * 4, 7);
       
-      // ORIGINAL FOR RECIPIENT & Reference
       doc.setFont("helvetica", "bold");
       doc.text("ORIGINAL FOR RECIPIENT", 14, y);
       y += 5;
@@ -909,7 +1121,6 @@
         y += (splitRef.length * 4) + 2;
       }
 
-      // Table Header
       y += 2;
       doc.setFillColor(30, 58, 138);
       doc.rect(14, y, 182, 7, "F");
@@ -962,7 +1173,6 @@
 
       let totalsStartY = y + 6;
 
-      // Right Side: Tax Breakdown Summary
       let summaryY = totalsStartY;
       const totTaxable = Number(inv.totalTaxable || 0);
       const totGst = Number(inv.totalGst || 0);
@@ -1001,7 +1211,6 @@
       doc.text("Amount Payable:", 128, summaryY);
       doc.text(`Rs. ${grandTot.toFixed(2)}`, 196, summaryY, { align: "right" });
 
-      // Left Side: Amount in Words positioned clearly below Amount Payable level on left side
       let wordsY = summaryY + 6;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8.5);
@@ -1011,7 +1220,6 @@
       const splitWords = doc.splitTextToSize(cleanText(numberToWords(grandTot)), 175);
       doc.text(splitWords, 14, wordsY);
 
-      // Bank Details & Signatory below
       y = wordsY + (splitWords.length * 4) + 8;
       doc.setLineWidth(0.2);
       doc.line(14, y - 4, 196, y - 4);
@@ -1051,20 +1259,6 @@
       doc.text("This is a computer generated document and requires no signature.", 14, y);
 
       doc.save(`Invoice_${cleanText(inv.invoiceNo).replace(/\//g, '_')}.pdf`);
-    }
-
-    async function loadReport(type) {
-      const apiUrl = localStorage.getItem('gst_sheet_api_url');
-      if (!apiUrl) return;
-      document.getElementById('reportLoading').classList.remove('hidden');
-      try {
-        const res = await fetch(`${apiUrl}?type=${type}`);
-        const rows = await res.json();
-        document.getElementById('reportTableHead').innerHTML = type === 'hsn' ? `<th class="p-3">HSN</th><th class="p-3 text-right">Qty</th><th class="p-3 text-right">Total</th>` : `<th class="p-3">${type.toUpperCase()}</th><th class="p-3 text-right">Total</th>`;
-        document.getElementById('reportTableBody').innerHTML = rows.length === 0 ? `<tr><td colspan="3" class="p-6 text-center text-slate-400">No records.</td></tr>` :
-          rows.map(r => `<tr class="hover:bg-slate-50"><td class="p-3 font-bold">${r.label}</td>${type === 'hsn' ? `<td class="p-3 text-right">${r.qty}</td>` : ''}<td class="p-3 text-right font-bold text-emerald-700">Rs. ${Number(r.total).toFixed(2)}</td></tr>`).join('');
-      } catch (err) { console.error(err); }
-      finally { document.getElementById('reportLoading').classList.add('hidden'); }
     }
   </script>
 </body>
