@@ -10,6 +10,15 @@
   <style>
     body { -webkit-tap-highlight-color: transparent; font-family: system-ui, -apple-system, sans-serif; }
     .active-tab { border-bottom: 3px solid #2563eb; color: #1d4ed8; font-weight: 700; }
+    #toastContainer {
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    #toastContainer.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 pb-24">
@@ -102,7 +111,6 @@
     <button id="submitBtn" onclick="submitInvoice()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg text-base transition">
       Submit Invoice to Sheet
     </button>
-    <p id="statusMessage" class="text-center text-sm font-medium"></p>
   </main>
 
   <!-- TAB 2: CUSTOMERS -->
@@ -128,7 +136,6 @@
       <button onclick="saveCustomer()" id="saveCustBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-sm shadow">
         Save Customer to Master
       </button>
-      <p id="custStatusMsg" class="text-center text-xs font-medium"></p>
     </section>
 
     <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
@@ -178,6 +185,12 @@
     </div>
   </main>
 
+  <!-- Toast Notification Bar -->
+  <div id="toastContainer" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs sm:text-sm font-medium pointer-events-none">
+    <span id="toastIcon">ℹ️</span>
+    <span id="toastMessage">Notification message</span>
+  </div>
+
   <script>
     let items = [{ hsn: '', unitPrice: '', qty: 1, gstPercent: 18 }];
     let allInvoices = [];
@@ -196,14 +209,31 @@
       renderItems();
     };
 
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toastContainer');
+      const icon = document.getElementById('toastIcon');
+      const msg = document.getElementById('toastMessage');
+
+      icon.innerText = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+      msg.innerText = message;
+
+      toast.className = `fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs sm:text-sm font-medium transition-all duration-300 ${
+        type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900 text-white'
+      } show`;
+
+      setTimeout(() => {
+        toast.className = toast.className.replace('show', '');
+      }, 3000);
+    }
+
     function toggleSettings() { document.getElementById('settingsBox').classList.toggle('hidden'); }
 
     function saveApiUrl() {
       const url = document.getElementById('apiUrlInput').value.trim();
-      if (!url.startsWith('https://script.google.com/')) { alert('Enter a valid Apps Script URL.'); return; }
+      if (!url.startsWith('https://script.google.com/')) { showToast('Enter a valid Apps Script URL.', 'error'); return; }
       localStorage.setItem('gst_sheet_api_url', url);
       document.getElementById('settingsBox').classList.add('hidden');
-      alert('API URL Saved!');
+      showToast('API URL Saved!');
       loadCustomers();
     }
 
@@ -243,14 +273,23 @@
       const apiUrl = localStorage.getItem('gst_sheet_api_url');
       const companyName = document.getElementById('newCustName').value.trim();
       const gstin = document.getElementById('newCustGstin').value.trim().toUpperCase();
-      if (!companyName || !gstin) { alert('Name and GSTIN required.'); return; }
+      if (!companyName || !gstin) { showToast('Name and GSTIN required.', 'error'); return; }
       
+      const btn = document.getElementById('saveCustBtn');
+      btn.disabled = true;
+      btn.innerHTML = `<svg class="animate-spin h-4 w-4 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>`;
+
       try {
         await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'saveCustomer', companyName, gstin }) });
-        alert('Customer saved!');
+        showToast('Customer saved successfully!');
         document.getElementById('newCustName').value = ''; document.getElementById('newCustGstin').value = '';
         loadCustomers();
-      } catch (err) { alert('Error: ' + err.message); }
+      } catch (err) { 
+        showToast('Error: ' + err.message, 'error'); 
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Save Customer to Master';
+      }
     }
 
     function renderItems() {
@@ -310,12 +349,11 @@
       return { totTaxable, totGst, totGrand };
     }
 
-   function resetForm() {
+    function resetForm() {
       document.getElementById('invNo').value = '';
       document.getElementById('invNo').disabled = false;
       document.getElementById('invDate').valueAsDate = new Date();
       
-      // Re-enable customer fields for new invoices
       document.getElementById('partyName').value = '';
       document.getElementById('partyName').disabled = false;
       document.getElementById('gstin').value = '';
@@ -333,40 +371,17 @@
     function editInvoice(invNo) {
       const inv = allInvoices.find(i => i.invoiceNo === invNo);
       if (!inv) return;
-
       document.getElementById('invNo').value = inv.invoiceNo;
       document.getElementById('invDate').value = inv.date;
       
-      // Load customer details but lock/disable them so they cannot be changed
       document.getElementById('partyName').value = inv.partyName;
       document.getElementById('partyName').disabled = true;
       document.getElementById('gstin').value = inv.gstin;
       document.getElementById('gstin').disabled = true;
       document.getElementById('customerSelect').disabled = true;
 
-      items = inv.items.map(it => ({
-        hsn: it.hsn,
-        unitPrice: it.unitPrice,
-        qty: it.qty,
-        gstPercent: it.gstPercent
-      }));
-
-      document.getElementById('formTitle').innerText = `Editing Invoice: ${inv.invoiceNo} (Customer Locked)`;
-      document.getElementById('cancelEditBtn').classList.remove('hidden');
-      document.getElementById('submitBtn').innerText = 'Update Invoice in Sheet';
-      renderItems();
-      switchTab('entry');
-    }
-
-    function editInvoice(invNo) {
-      const inv = allInvoices.find(i => i.invoiceNo === invNo);
-      if (!inv) return;
-      document.getElementById('invNo').value = inv.invoiceNo;
-      document.getElementById('invDate').value = inv.date;
-      document.getElementById('partyName').value = inv.partyName;
-      document.getElementById('gstin').value = inv.gstin;
       items = inv.items.map(it => ({ hsn: it.hsn, unitPrice: it.unitPrice, qty: it.qty, gstPercent: it.gstPercent }));
-      document.getElementById('formTitle').innerText = `Editing Invoice: ${inv.invoiceNo}`;
+      document.getElementById('formTitle').innerText = `Editing Invoice: ${inv.invoiceNo} (Customer Locked)`;
       document.getElementById('cancelEditBtn').classList.remove('hidden');
       document.getElementById('submitBtn').innerText = 'Update Invoice in Sheet';
       renderItems();
@@ -375,12 +390,12 @@
 
     async function submitInvoice() {
       const apiUrl = localStorage.getItem('gst_sheet_api_url');
-      if (!apiUrl) { alert('Set API URL first.'); return; }
+      if (!apiUrl) { showToast('Set API URL first.', 'error'); return; }
       const invoiceNo = document.getElementById('invNo').value.trim();
       const date = document.getElementById('invDate').value;
       const partyName = document.getElementById('partyName').value.trim();
       const gstin = document.getElementById('gstin').value.trim().toUpperCase();
-      if (!invoiceNo || !date || !partyName) { alert('Fill required fields.'); return; }
+      if (!invoiceNo || !date || !partyName) { showToast('Fill required fields.', 'error'); return; }
 
       const totals = recalculateTotals();
       const payload = {
@@ -396,12 +411,26 @@
         }))
       };
 
+      const btn = document.getElementById('submitBtn');
+      const originalText = btn.innerText;
+      btn.disabled = true;
+      btn.innerHTML = `<div class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg> Saving to Sheet...</div>`;
+
       try {
         const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
         const result = await res.json();
-        if (result.status === 'success') { alert('Saved successfully!'); resetForm(); }
-        else throw new Error(result.message);
-      } catch (err) { alert('Error: ' + err.message); }
+        if (result.status === 'success') { 
+          showToast(`Invoice ${invoiceNo} saved successfully!`); 
+          resetForm(); 
+        } else { 
+          throw new Error(result.message); 
+        }
+      } catch (err) { 
+        showToast('Error: ' + err.message, 'error'); 
+      } finally {
+        btn.disabled = false;
+        btn.innerText = originalText;
+      }
     }
 
     async function loadInvoices() {
@@ -454,7 +483,18 @@
         `).join('');
     }
 
- 
+    async function deleteInvoice(invoiceNo) {
+      if (!confirm(`Are you sure you want to delete Invoice ${invoiceNo}?`)) return;
+      const apiUrl = localStorage.getItem('gst_sheet_api_url');
+      try {
+        const res = await fetch(`${apiUrl}?action=delete&invoiceNo=${encodeURIComponent(invoiceNo)}`, { method: 'POST' });
+        const result = await res.json();
+        if (result.status === 'success') {
+          showToast(`Invoice ${invoiceNo} deleted successfully.`);
+          loadInvoices();
+        } else { throw new Error(result.message); }
+      } catch (err) { showToast('Failed to delete: ' + err.message, 'error'); }
+    }
 
     function generatePdf(inv) {
       const { jsPDF } = window.jspdf;
