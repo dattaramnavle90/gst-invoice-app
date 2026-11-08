@@ -38,18 +38,19 @@
 
   <!-- Navigation Tabs -->
   <nav class="bg-white shadow-sm flex border-b border-slate-200 sticky top-[68px] z-10">
-    <button id="tab-entry" onclick="switchTab('entry')" class="flex-1 py-3 text-sm text-center active-tab">
+    <button id="tab-entry" onclick="switchTab('entry')" class="flex-1 py-3 text-xs sm:text-sm text-center active-tab">
       ➕ New Invoice
     </button>
-    <button id="tab-reports" onclick="switchTab('reports')" class="flex-1 py-3 text-sm text-center text-slate-500 font-medium">
-      📊 GST Reports
+    <button id="tab-invoices" onclick="switchTab('invoices')" class="flex-1 py-3 text-xs sm:text-sm text-center text-slate-500 font-medium">
+      🧾 Invoices
+    </button>
+    <button id="tab-reports" onclick="switchTab('reports')" class="flex-1 py-3 text-xs sm:text-sm text-center text-slate-500 font-medium">
+      📊 GST Report
     </button>
   </nav>
 
   <!-- ==================== TAB 1: NEW INVOICE ==================== -->
   <main id="view-entry" class="p-4 max-w-lg mx-auto space-y-4">
-    
-    <!-- Invoice Header Details -->
     <section class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
       <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Invoice & Party Details</h2>
       
@@ -75,14 +76,12 @@
       </div>
     </section>
 
-    <!-- Line Items Container -->
     <div id="itemsContainer" class="space-y-3"></div>
 
     <button onclick="addItem()" class="w-full py-3 border-2 border-dashed border-blue-400 text-blue-700 font-semibold rounded-xl text-sm hover:bg-blue-50 transition">
       + Add Another Item
     </button>
 
-    <!-- Grand Totals Summary Card -->
     <section class="bg-slate-900 text-white p-4 rounded-xl shadow-md space-y-2">
       <div class="flex justify-between text-sm text-slate-300">
         <span>Total Taxable Amount:</span>
@@ -98,16 +97,56 @@
       </div>
     </section>
 
-    <!-- Submit Button -->
     <button id="submitBtn" onclick="submitInvoice()" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 rounded-xl shadow-lg text-base transition">
       Submit Invoice to Sheet
     </button>
     <p id="statusMessage" class="text-center text-sm font-medium"></p>
   </main>
 
-  <!-- ==================== TAB 2: REPORTS ==================== -->
+  <!-- ==================== TAB 2: INVOICES LIST & FILTERS ==================== -->
+  <main id="view-invoices" class="hidden p-4 max-w-lg mx-auto space-y-3">
+    <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 space-y-2">
+      <input id="invoiceSearch" type="text" oninput="filterInvoices()" placeholder="🔍 Search invoice no, party, or GSTIN..."
+        class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+      
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Year</label>
+          <select id="filterYear" onchange="filterInvoices()" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold">
+            <option value="">All Years</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Quarter</label>
+          <select id="filterQuarter" onchange="filterInvoices()" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold">
+            <option value="">All Quarters</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Month</label>
+          <select id="filterMonth" onchange="filterInvoices()" class="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold">
+            <option value="">All Months</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="flex justify-between items-center pt-1">
+        <span id="invoiceCountLabel" class="text-xs text-slate-500 font-medium">Showing 0 invoices</span>
+        <button onclick="loadInvoices()" class="bg-slate-100 hover:bg-slate-200 text-blue-700 px-3 py-1 rounded-lg text-xs font-bold border border-slate-300">
+          ↻ Refresh
+        </button>
+      </div>
+    </div>
+
+    <div id="invoicesLoading" class="hidden text-center py-8 text-sm text-slate-500">
+      Loading saved invoices from Google Sheets...
+    </div>
+
+    <div id="invoicesListContainer" class="space-y-3"></div>
+  </main>
+
+  <!-- ==================== TAB 3: GST REPORTS ==================== -->
   <main id="view-reports" class="hidden p-4 max-w-lg mx-auto space-y-4">
-    <!-- Report Filter Buttons -->
     <div class="grid grid-cols-3 gap-2 bg-slate-200 p-1 rounded-xl">
       <button onclick="loadReport('hsn')" id="rep-btn-hsn" class="py-2 text-xs font-bold rounded-lg bg-white text-blue-700 shadow-sm">HSN Wise</button>
       <button onclick="loadReport('month')" id="rep-btn-month" class="py-2 text-xs font-bold rounded-lg text-slate-600">Month Wise</button>
@@ -118,7 +157,6 @@
       Fetching live data from Google Sheets...
     </div>
 
-    <!-- Report Results Table -->
     <div id="reportContent" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-left border-collapse">
@@ -132,8 +170,8 @@
   </main>
 
   <script>
-    // Initialize App State
     let items = [{ hsn: '', unitPrice: '', qty: 1, gstPercent: 18 }];
+    let allInvoices = [];
     const GST_RATES = [0, 5, 12, 18, 28];
 
     window.onload = () => {
@@ -163,14 +201,16 @@
     }
 
     function switchTab(tab) {
-      document.getElementById('view-entry').classList.toggle('hidden', tab !== 'entry');
-      document.getElementById('view-reports').classList.toggle('hidden', tab !== 'reports');
-      document.getElementById('tab-entry').className = tab === 'entry' ? 'flex-1 py-3 text-sm text-center active-tab' : 'flex-1 py-3 text-sm text-center text-slate-500 font-medium';
-      document.getElementById('tab-reports').className = tab === 'reports' ? 'flex-1 py-3 text-sm text-center active-tab' : 'flex-1 py-3 text-sm text-center text-slate-500 font-medium';
+      ['entry', 'invoices', 'reports'].forEach(t => {
+        document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tab);
+        document.getElementById(`tab-${t}`).className = t === tab
+          ? 'flex-1 py-3 text-xs sm:text-sm text-center active-tab'
+          : 'flex-1 py-3 text-xs sm:text-sm text-center text-slate-500 font-medium';
+      });
+      if (tab === 'invoices') loadInvoices();
       if (tab === 'reports') loadReport('hsn');
     }
 
-    // Dynamic Item Rendering & Live Auto-Calculation
     function renderItems() {
       const container = document.getElementById('itemsContainer');
       container.innerHTML = '';
@@ -244,9 +284,8 @@
     function updateItem(idx, field, value) {
       items[idx][field] = value;
       if (field === 'gstPercent') {
-        renderItems(); // Re-render buttons when GST chip clicked
+        renderItems();
       } else {
-        // Update numbers directly without losing input focus
         const price = parseFloat(items[idx].unitPrice) || 0;
         const qty = parseFloat(items[idx].qty) || 0;
         const taxable = price * qty;
@@ -285,7 +324,6 @@
       return { totTaxable, totGst, totGrand };
     }
 
-    // Submit Invoice to Google Sheet
     async function submitInvoice() {
       const apiUrl = localStorage.getItem('gst_sheet_api_url');
       if (!apiUrl) {
@@ -333,7 +371,6 @@
       status.innerText = '';
 
       try {
-        // Using text/plain avoids CORS preflight issues with Google Apps Script
         const res = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -344,7 +381,6 @@
         if (result.status === 'success') {
           status.className = 'text-center text-sm font-bold text-emerald-600';
           status.innerText = `✅ Invoice ${invoiceNo} saved to Google Sheets!`;
-          // Reset form for next entry
           document.getElementById('invNo').value = '';
           document.getElementById('partyName').value = '';
           document.getElementById('gstin').value = '';
@@ -362,7 +398,130 @@
       }
     }
 
-    // Fetch & Render Reports (HSN, Month, Quarter)
+    // ==================== INVOICES TAB & FILTERS ====================
+    async function loadInvoices() {
+      const apiUrl = localStorage.getItem('gst_sheet_api_url');
+      if (!apiUrl) {
+        alert('Please set your API URL in settings first.');
+        return;
+      }
+
+      const loader = document.getElementById('invoicesLoading');
+      loader.classList.remove('hidden');
+
+      try {
+        const res = await fetch(`${apiUrl}?type=invoices`);
+        allInvoices = await res.json();
+        populateFilterDropdowns();
+        filterInvoices();
+      } catch (err) {
+        document.getElementById('invoicesListContainer').innerHTML = `<div class="bg-red-50 text-red-600 p-4 rounded-xl text-sm text-center">Failed to load invoices: ${err.message}</div>`;
+      } finally {
+        loader.classList.add('hidden');
+      }
+    }
+
+    function populateFilterDropdowns() {
+      const years = [...new Set(allInvoices.map(i => i.year))].sort().reverse();
+      const quarters = [...new Set(allInvoices.map(i => i.quarter))].sort().reverse();
+      const months = [...new Set(allInvoices.map(i => i.month))];
+
+      const yearSel = document.getElementById('filterYear');
+      const qtrSel = document.getElementById('filterQuarter');
+      const monSel = document.getElementById('filterMonth');
+
+      const currYear = yearSel.value;
+      const currQtr = qtrSel.value;
+      const currMon = monSel.value;
+
+      yearSel.innerHTML = '<option value="">All Years</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+      qtrSel.innerHTML = '<option value="">All Quarters</option>' + quarters.map(q => `<option value="${q}">${q}</option>`).join('');
+      monSel.innerHTML = '<option value="">All Months</option>' + months.map(m => `<option value="${m}">${m}</option>`).join('');
+
+      yearSel.value = currYear;
+      qtrSel.value = currQtr;
+      monSel.value = currMon;
+    }
+
+    function filterInvoices() {
+      const search = document.getElementById('invoiceSearch').value.toLowerCase();
+      const yr = document.getElementById('filterYear').value;
+      const qtr = document.getElementById('filterQuarter').value;
+      const mon = document.getElementById('filterMonth').value;
+
+      const filtered = allInvoices.filter(inv => {
+        const matchSearch = inv.invoiceNo.toLowerCase().includes(search) ||
+                            inv.partyName.toLowerCase().includes(search) ||
+                            inv.gstin.toLowerCase().includes(search);
+        const matchYear = !yr || inv.year === yr;
+        const matchQtr = !qtr || inv.quarter === qtr;
+        const matchMon = !mon || inv.month === mon;
+        return matchSearch && matchYear && matchQtr && matchMon;
+      });
+
+      renderInvoicesList(filtered);
+    }
+
+    function renderInvoicesList(list) {
+      const container = document.getElementById('invoicesListContainer');
+      document.getElementById('invoiceCountLabel').innerText = `Showing ${list.length} invoice${list.length === 1 ? '' : 's'}`;
+
+      if (list.length === 0) {
+        container.innerHTML = `<div class="bg-white p-8 rounded-xl text-center text-slate-400 text-sm border border-slate-200">No matching invoices found.</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map((inv, idx) => {
+        const itemsRows = inv.items.map(it => `
+          <tr class="border-t border-slate-100 text-xs">
+            <td class="py-1.5 font-medium">${it.hsn}</td>
+            <td class="py-1.5 text-right">${it.qty} × ₹${it.unitPrice.toFixed(2)}</td>
+            <td class="py-1.5 text-right">${it.gstPercent}%</td>
+            <td class="py-1.5 text-right font-semibold">₹${it.afterTax.toFixed(2)}</td>
+          </tr>
+        `).join('');
+
+        return `
+          <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div onclick="document.getElementById('inv-details-${idx}').classList.toggle('hidden')" class="p-4 cursor-pointer active:bg-slate-50">
+              <div class="flex justify-between items-start">
+                <div>
+                  <span class="inline-block bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded">${inv.invoiceNo}</span>
+                  <span class="text-xs text-slate-400 ml-2">${inv.date}</span>
+                  <h3 class="font-bold text-slate-800 mt-1">${inv.partyName}</h3>
+                  ${inv.gstin ? `<p class="text-xs text-slate-500">GSTIN: ${inv.gstin}</p>` : ''}
+                </div>
+                <div class="text-right">
+                  <span class="block text-base font-bold text-emerald-700">₹${inv.grandTotal.toFixed(2)}</span>
+                  <span class="block text-[11px] text-slate-400">GST: ₹${inv.totalGst.toFixed(2)}</span>
+                  <span class="inline-block text-[11px] text-blue-600 font-semibold mt-1">View Items ▾</span>
+                </div>
+              </div>
+            </div>
+
+            <div id="inv-details-${idx}" class="hidden bg-slate-50 px-4 py-3 border-t border-slate-200">
+              <table class="w-full text-left">
+                <thead>
+                  <tr class="text-[10px] uppercase text-slate-400">
+                    <th class="pb-1">HSN</th>
+                    <th class="pb-1 text-right">Qty × Rate</th>
+                    <th class="pb-1 text-right">GST</th>
+                    <th class="pb-1 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>${itemsRows}</tbody>
+              </table>
+              <div class="border-t border-slate-200 mt-2 pt-2 flex justify-between text-xs text-slate-600">
+                <span>Taxable: <b>₹${inv.totalTaxable.toFixed(2)}</b></span>
+                <span>Total GST: <b>₹${inv.totalGst.toFixed(2)}</b></span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ==================== GST REPORTS LOGIC ====================
     async function loadReport(type) {
       const apiUrl = localStorage.getItem('gst_sheet_api_url');
       if (!apiUrl) {
