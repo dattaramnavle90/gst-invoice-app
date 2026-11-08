@@ -87,7 +87,7 @@
 
       <div>
         <label class="block text-xs font-semibold text-slate-600 mb-1">Reference / PO Details</label>
-        <input id="poReference" type="text" placeholder="Purchase Order number PO 4535584610" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm" />
+        <input id="poReference" type="text" placeholder="Purchase Order number PO 4535584610..." class="w-full p-2.5 border border-slate-300 rounded-lg text-sm" />
       </div>
 
       <div>
@@ -261,4 +261,662 @@
   <main id="view-reports" class="hidden p-4 max-w-lg mx-auto space-y-4">
     <div class="grid grid-cols-3 gap-2 bg-slate-200 p-1 rounded-xl">
       <button onclick="loadReport('hsn')" id="rep-btn-hsn" class="py-2 text-xs font-bold rounded-lg bg-white text-blue-700 shadow-sm">HSN Wise</button>
-      <button onclick="loadReport('month
+      <button onclick="loadReport('month')" id="rep-btn-month" class="py-2 text-xs font-bold rounded-lg text-slate-600">Month Wise</button>
+      <button onclick="loadReport('quarter')" id="rep-btn-quarter" class="py-2 text-xs font-bold rounded-lg text-slate-600">Quarter Wise</button>
+    </div>
+    <div id="reportLoading" class="hidden text-center py-8 text-sm text-slate-500">Fetching live data...</div>
+    <div id="reportContent" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <table class="w-full text-left border-collapse">
+        <thead><tr id="reportTableHead" class="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500"></tr></thead>
+        <tbody id="reportTableBody" class="divide-y divide-slate-100 text-sm"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Toast Notification Bar -->
+  <div id="toastContainer" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs sm:text-sm font-medium pointer-events-none">
+    <span id="toastIcon">ℹ️</span>
+    <span id="toastMessage">Notification message</span>
+  </div>
+
+  <script>
+    let items = [{ hsn: '995419', itemName: '', unitPrice: '', qty: 1, gstPercent: 18 }];
+    let allInvoices = [];
+    let savedCustomers = [];
+    const GST_RATES = [0, 5, 12, 18, 28];
+
+    window.onload = () => {
+      document.getElementById('invDate').valueAsDate = new Date();
+      document.getElementById('dueDate').valueAsDate = new Date();
+      
+      loadVendorProfile();
+
+      const savedUrl = localStorage.getItem('gst_sheet_api_url');
+      if (savedUrl) {
+        document.getElementById('apiUrlInput').value = savedUrl;
+        loadCustomers();
+      } else {
+        document.getElementById('settingsBox').classList.remove('hidden');
+      }
+      renderItems();
+    };
+
+    function loadVendorProfile() {
+      const v = JSON.parse(localStorage.getItem('vendor_profile') || '{}');
+      if (v.name) document.getElementById('vendorName').value = v.name;
+      if (v.gstin) document.getElementById('vendorGstin').value = v.gstin;
+      if (v.address) document.getElementById('vendorAddress').value = v.address;
+      if (v.phone) document.getElementById('vendorPhone').value = v.phone;
+      if (v.email) document.getElementById('vendorEmail').value = v.email;
+      if (v.bank) document.getElementById('vendorBank').value = v.bank;
+      if (v.accNo) document.getElementById('vendorAccNo').value = v.accNo;
+      if (v.ifsc) document.getElementById('vendorIfsc').value = v.ifsc;
+      if (v.branch) document.getElementById('vendorBranch').value = v.branch;
+    }
+
+    function saveVendorProfile() {
+      const profile = {
+        name: document.getElementById('vendorName').value.trim(),
+        gstin: document.getElementById('vendorGstin').value.trim().toUpperCase(),
+        address: document.getElementById('vendorAddress').value.trim(),
+        phone: document.getElementById('vendorPhone').value.trim(),
+        email: document.getElementById('vendorEmail').value.trim(),
+        bank: document.getElementById('vendorBank').value.trim(),
+        accNo: document.getElementById('vendorAccNo').value.trim(),
+        ifsc: document.getElementById('vendorIfsc').value.trim().toUpperCase(),
+        branch: document.getElementById('vendorBranch').value.trim()
+      };
+      localStorage.setItem('vendor_profile', JSON.stringify(profile));
+      showToast('Vendor profile saved successfully!');
+    }
+
+    function getVendorProfile() {
+      return JSON.parse(localStorage.getItem('vendor_profile') || JSON.stringify({
+        name: "POWER SOURCE",
+        gstin: "27AHJPN5767D1Z1",
+        address: "B-103, B WING 1ST FLOOR, VRINDAVAN CHS, MARATHAN COMPLEX, KOK-KARVE NAGAR, KANJURMARG, Mumbai Suburban, MAHARASHTRA, 400042",
+        phone: "+91 9833192215",
+        email: "powersource@example.com",
+        bank: "State Bank of India",
+        accNo: "33698857400",
+        ifsc: "SBIN0007212",
+        branch: "VIKHROLI (East), KANNAMWAR NAGAR, MUMBAI"
+      }));
+    }
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toastContainer');
+      const icon = document.getElementById('toastIcon');
+      const msg = document.getElementById('toastMessage');
+
+      icon.innerText = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+      msg.innerText = message;
+
+      toast.className = `fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs sm:text-sm font-medium transition-all duration-300 ${
+        type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900 text-white'
+      } show`;
+
+      setTimeout(() => {
+        toast.className = toast.className.replace('show', '');
+      }, 3000);
+    }
+
+    function toggleSettings() { document.getElementById('settingsBox').classList.toggle('hidden'); }
+
+    function saveApiUrl() {
+      const url = document.getElementById('apiUrlInput').value.trim();
+      if (!url.startsWith('https://script.google.com/')) { showToast('Enter a valid Apps Script URL.', 'error'); return; }
+      localStorage.setItem('gst_sheet_api_url', url);
+      document.getElementById('settingsBox').classList.add('hidden');
+      showToast('API URL Saved!');
+      loadCustomers();
+    }
+
+    function switchTab(tab) {
+      ['entry', 'customers', 'vendor', 'invoices', 'reports'].forEach(t => {
+        const el = document.getElementById(`view-${t}`);
+        if (el) el.classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById(`tab-${t}`);
+        if (btn) {
+          btn.className = t === tab ? 'flex-1 min-w-[90px] py-3 text-[11px] sm:text-sm text-center active-tab' : 'flex-1 min-w-[90px] py-3 text-[11px] sm:text-sm text-center text-slate-500 font-medium';
+        }
+      });
+      if (tab === 'customers') loadCustomers();
+      if (tab === 'invoices') loadInvoices();
+      if (tab === 'reports') loadReport('hsn');
+      if (tab === 'entry') loadCustomers();
+    }
+
+    async function loadCustomers() {
+      const apiUrl = localStorage.getItem('gst_sheet_api_url');
+      if (!apiUrl) return;
+      try {
+        const res = await fetch(`${apiUrl}?type=customers`);
+        savedCustomers = await res.json();
+        document.getElementById('customerSelect').innerHTML = '<option value="">-- Select from Customer Master --</option>' + 
+          savedCustomers.map((c, i) => `<option value="${i}">${c.companyName} (${c.gstin || 'No GSTIN'})</option>`).join('');
+        
+        document.getElementById('customersListContainer').innerHTML = savedCustomers.length === 0 ? '<p class="text-xs text-slate-400 py-3 text-center">No customers saved.</p>' :
+          savedCustomers.map(c => `<div class="py-2.5"><h4 class="font-bold text-slate-800">${c.companyName}</h4><p class="text-xs text-slate-500">GSTIN: <b>${c.gstin || 'N/A'}</b></p><p class="text-xs text-slate-400">${c.address || ''}</p></div>`).join('');
+      } catch (err) { console.error(err); }
+    }
+
+    function onCustomerSelected() {
+      const idx = document.getElementById('customerSelect').value;
+      if (idx === "") { 
+        document.getElementById('partyName').value = ""; 
+        document.getElementById('gstin').value = ""; 
+        document.getElementById('partyAddress').value = "";
+        return; 
+      }
+      const cust = savedCustomers[idx];
+      document.getElementById('partyName').value = cust.companyName;
+      document.getElementById('gstin').value = cust.gstin;
+      document.getElementById('partyAddress').value = cust.address || '';
+    }
+
+    async function saveCustomer() {
+      const apiUrl = localStorage.getItem('gst_sheet_api_url');
+      const companyName = document.getElementById('newCustName').value.trim();
+      const gstin = document.getElementById('newCustGstin').value.trim().toUpperCase();
+      const address = document.getElementById('newCustAddress').value.trim();
+      const phone = document.getElementById('newCustPhone').value.trim();
+
+      if (!companyName || !gstin) { showToast('Name and GSTIN required.', 'error'); return; }
+      
+      const btn = document.getElementById('saveCustBtn');
+      btn.disabled = true;
+      btn.innerHTML = `<svg class="animate-spin h-4 w-4 mx-auto text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>`;
+
+      try {
+        await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'saveCustomer', companyName, gstin, address, phone }) });
+        showToast('Customer saved successfully!');
+        document.getElementById('newCustName').value = ''; 
+        document.getElementById('newCustGstin').value = '';
+        document.getElementById('newCustAddress').value = '';
+        document.getElementById('newCustPhone').value = '';
+        loadCustomers();
+      } catch (err) { 
+        showToast('Error: ' + err.message, 'error'); 
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Save Customer to Master';
+      }
+    }
+
+    function renderItems() {
+      const container = document.getElementById('itemsContainer');
+      container.innerHTML = '';
+      items.forEach((item, idx) => {
+        const price = parseFloat(item.unitPrice) || 0;
+        const qty = parseFloat(item.qty) || 0;
+        const taxable = price * qty;
+        const gstAmt = taxable * (item.gstPercent / 100);
+        const afterTax = taxable + gstAmt;
+
+        const rateButtons = GST_RATES.map(rate => `
+          <button type="button" onclick="setGstRate(${idx}, ${rate})"
+            class="flex-1 py-1.5 text-xs font-bold rounded-lg border ${item.gstPercent === rate ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-300'}">
+            ${rate}%
+          </button>
+        `).join('');
+
+        container.innerHTML += `
+          <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+            <div class="flex justify-between items-center"><span class="text-xs font-bold uppercase text-blue-700">Item #${idx + 1}</span>${items.length > 1 ? `<button onclick="removeItem(${idx})" class="text-xs text-red-500 font-semibold">Remove</button>` : ''}</div>
+            
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Item Description</label>
+              <textarea rows="2" oninput="items[${idx}].itemName = this.value" placeholder="e.g. Modular Celling for F&B Lab and Seating" class="w-full p-2 border rounded-lg text-sm">${item.itemName || ''}</textarea>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">HSN / SAC</label>
+                <input type="text" value="${item.hsn || ''}" oninput="items[${idx}].hsn = this.value" placeholder="995419" class="w-full p-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">Rate / Item</label>
+                <input type="number" step="0.01" value="${item.unitPrice || ''}" oninput="items[${idx}].unitPrice = this.value; updateCalculations(${idx})" placeholder="0.00" class="w-full p-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">Qty</label>
+                <input type="number" value="${item.qty || 1}" oninput="items[${idx}].qty = this.value; updateCalculations(${idx})" placeholder="1" class="w-full p-2 border rounded-lg text-sm" />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Select GST %</label>
+              <div class="flex gap-1.5">${rateButtons}</div>
+            </div>
+
+            <div class="bg-slate-50 p-2.5 rounded-lg border grid grid-cols-3 text-center text-xs">
+              <div>Taxable: <b id="calc-taxable-${idx}">₹${taxable.toFixed(2)}</b></div>
+              <div>GST: <b id="calc-gst-${idx}">₹${gstAmt.toFixed(2)}</b></div>
+              <div>Total: <b id="calc-total-${idx}">₹${afterTax.toFixed(2)}</b></div>
+            </div>
+          </div>
+        `;
+      });
+      recalculateTotals();
+    }
+
+    function updateCalculations(idx) {
+      const item = items[idx];
+      const price = parseFloat(item.unitPrice) || 0;
+      const qty = parseFloat(item.qty) || 0;
+      const taxable = price * qty;
+      const gstAmt = taxable * (item.gstPercent / 100);
+      const afterTax = taxable + gstAmt;
+
+      document.getElementById(`calc-taxable-${idx}`).innerText = `₹${taxable.toFixed(2)}`;
+      document.getElementById(`calc-gst-${idx}`).innerText = `₹${gstAmt.toFixed(2)}`;
+      document.getElementById(`calc-total-${idx}`).innerText = `₹${afterTax.toFixed(2)}`;
+      recalculateTotals();
+    }
+
+    function setGstRate(idx, rate) {
+      items[idx].gstPercent = rate;
+      renderItems();
+    }
+
+    function addItem() { items.push({ hsn: '995419', itemName: '', unitPrice: '', qty: 1, gstPercent: 18 }); renderItems(); }
+    function removeItem(idx) { items.splice(idx, 1); renderItems(); }
+
+    function recalculateTotals() {
+      let totTaxable = 0, totGst = 0, totGrand = 0;
+      items.forEach(it => {
+        const taxable = (parseFloat(it.unitPrice) || 0) * (parseFloat(it.qty) || 0);
+        const gst = taxable * (it.gstPercent / 100);
+        totTaxable += taxable; totGst += gst; totGrand += taxable + gst;
+      });
+      document.getElementById('summaryTaxable').innerText = `₹${totTaxable.toFixed(2)}`;
+      document.getElementById('summaryGst').innerText = `₹${totGst.toFixed(2)}`;
+      document.getElementById('summaryGrand').innerText = `₹${totGrand.toFixed(2)}`;
+      return { totTaxable, totGst, totGrand };
+    }
+
+    function resetForm() {
+      document.getElementById('invNo').value = '';
+      document.getElementById('invNo').disabled = false;
+      document.getElementById('invDate').valueAsDate = new Date();
+      document.getElementById('dueDate').valueAsDate = new Date();
+      document.getElementById('poReference').value = '';
+      document.getElementById('placeOfSupply').value = '27-MAHARASHTRA';
+      document.getElementById('invoiceNotes').value = '80% Advance and 20% job again delivery.';
+      
+      document.getElementById('partyName').value = '';
+      document.getElementById('partyName').disabled = false;
+      document.getElementById('gstin').value = '';
+      document.getElementById('gstin').disabled = false;
+      document.getElementById('partyAddress').value = '';
+      document.getElementById('partyAddress').disabled = false;
+      document.getElementById('customerSelect').value = '';
+      document.getElementById('customerSelect').disabled = false;
+
+      document.getElementById('formTitle').innerText = 'New Invoice Details';
+      document.getElementById('cancelEditBtn').classList.add('hidden');
+      document.getElementById('submitBtn').innerText = 'Submit Invoice to Sheet';
+      items = [{ hsn: '995419', itemName: '', unitPrice: '', qty: 1, gstPercent: 18 }];
+      renderItems();
+    }
+
+    function editInvoice(invNo) {
+      const inv = allInvoices.find(i => i.invoiceNo === invNo);
+      if (!inv) return;
+      document.getElementById('invNo').value = inv.invoiceNo;
+      document.getElementById('invDate').value = inv.date;
+      if (inv.dueDate) document.getElementById('dueDate').value = inv.dueDate;
+      if (inv.placeOfSupply) document.getElementById('placeOfSupply').value = inv.placeOfSupply;
+      if (inv.poReference) document.getElementById('poReference').value = inv.poReference;
+      if (inv.invoiceNotes) document.getElementById('invoiceNotes').value = inv.invoiceNotes;
+      
+      document.getElementById('partyName').value = inv.partyName;
+      document.getElementById('partyName').disabled = true;
+      document.getElementById('gstin').value = inv.gstin;
+      document.getElementById('gstin').disabled = true;
+      document.getElementById('partyAddress').value = inv.partyAddress || '';
+      document.getElementById('partyAddress').disabled = true;
+      document.getElementById('customerSelect').disabled = true;
+
+      items = inv.items.map(it => ({ hsn: it.hsn, itemName: it.itemName || '', unitPrice: it.unitPrice, qty: it.qty, gstPercent: it.gstPercent }));
+      document.getElementById('formTitle').innerText = `Editing Invoice: ${inv.invoiceNo} (Customer Locked)`;
+      document.getElementById('cancelEditBtn').classList.remove('hidden');
+      document.getElementById('submitBtn').innerText = 'Update Invoice in Sheet';
+      renderItems();
+      switchTab('entry');
+    }
+
+    async function submitInvoice() {
+      const apiUrl = localStorage.getItem('gst_sheet_api_url');
+      if (!apiUrl) { showToast('Set API URL first.', 'error'); return; }
+      const invoiceNo = document.getElementById('invNo').value.trim();
+      const date = document.getElementById('invDate').value;
+      const dueDate = document.getElementById('dueDate').value;
+      const placeOfSupply = document.getElementById('placeOfSupply').value.trim();
+      const poReference = document.getElementById('poReference').value.trim();
+      const invoiceNotes = document.getElementById('invoiceNotes').value.trim();
+      const partyName = document.getElementById('partyName').value.trim();
+      const gstin = document.getElementById('gstin').value.trim().toUpperCase();
+      const partyAddress = document.getElementById('partyAddress').value.trim();
+
+      if (!invoiceNo || !date || !partyName) { showToast('Fill required fields.', 'error'); return; }
+
+      const totals = recalculateTotals();
+      const payload = {
+        invoiceNo, date, dueDate, placeOfSupply, poReference, invoiceNotes, partyName, gstin, partyAddress,
+        totalTaxable: Number(totals.totTaxable.toFixed(2)),
+        totalGst: Number(totals.totGst.toFixed(2)),
+        grandTotal: Number(totals.totGrand.toFixed(2)),
+        items: items.map(it => ({
+          hsn: it.hsn || '995419', itemName: it.itemName || '', unitPrice: parseFloat(it.unitPrice) || 0, qty: parseFloat(it.qty) || 0,
+          gstPercent: it.gstPercent, taxable: Number(((it.unitPrice||0)*(it.qty||0)).toFixed(2)),
+          gstAmount: Number(((it.unitPrice||0)*(it.qty||0)*(it.gstPercent/100)).toFixed(2)),
+          afterTax: Number(((it.unitPrice||0)*(it.qty||0)*(1 + it.gstPercent/100)).toFixed(2))
+        }))
+      };
+
+      const btn = document.getElementById('submitBtn');
+      const originalText = btn.innerText;
+      btn.disabled = true;
+      btn.innerHTML = `<div class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg> Saving to Sheet...</div>`;
+
+      try {
+        const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
+        const result = await res.json();
+        if (result.status === 'success') { 
+          showToast(`Invoice ${invoiceNo} saved successfully!`); 
+          resetForm(); 
+        } else { 
+          throw new Error(result.message); 
+        }
+      } catch (err) { 
+        showToast('Error: ' + err.message, 'error'); 
+      } finally {
+        btn.disabled = false;
+        btn.innerText = originalText;
+      }
+    }
+
+    async function loadInvoices() {
+      const apiUrl = localStorage.getItem('gst_sheet_api_url');
+      if (!apiUrl) return;
+      document.getElementById('invoicesLoading').classList.remove('hidden');
+      try {
+        const res = await fetch(`${apiUrl}?type=invoices`);
+        allInvoices = await res.json();
+        populateFilterDropdowns();
+        filterInvoices();
+      } catch (err) { console.error(err); }
+      finally { document.getElementById('invoicesLoading').classList.add('hidden'); }
+    }
+
+    function populateFilterDropdowns() {
+      const years = [...new Set(allInvoices.map(i => i.year))].sort().reverse();
+      const quarters = [...new Set(allInvoices.map(i => i.quarter))].sort().reverse();
+      const months = [...new Set(allInvoices.map(i => i.month))];
+      document.getElementById('filterYear').innerHTML = '<option value="">All Years</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+      document.getElementById('filterQuarter').innerHTML = '<option value="">All Quarters</option>' + quarters.map(q => `<option value="${q}">${q}</option>`).join('');
+      document.getElementById('filterMonth').innerHTML = '<option value="">All Months</option>' + months.map(m => `<option value="${m}">${m}</option>`).join('');
+    }
+
+    function filterInvoices() {
+      const search = document.getElementById('invoiceSearch').value.toLowerCase();
+      const yr = document.getElementById('filterYear').value;
+      const qtr = document.getElementById('filterQuarter').value;
+      const mon = document.getElementById('filterMonth').value;
+
+      const filtered = allInvoices.filter(inv => {
+        return (inv.invoiceNo.toLowerCase().includes(search) || inv.partyName.toLowerCase().includes(search)) &&
+               (!yr || inv.year === yr) && (!qtr || inv.quarter === qtr) && (!mon || inv.month === mon);
+      });
+
+      document.getElementById('invoiceCountLabel').innerText = `Showing ${filtered.length} invoice(s)`;
+      document.getElementById('invoicesListContainer').innerHTML = filtered.length === 0 ? '<div class="bg-white p-6 text-center text-slate-400 text-sm rounded-xl">No invoices found.</div>' :
+        filtered.map((inv, idx) => `
+          <div class="bg-white rounded-xl shadow-sm border p-4 space-y-2">
+            <div class="flex justify-between items-start">
+              <div><span class="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded">${inv.invoiceNo}</span><span class="text-xs text-slate-400 ml-2">${inv.date}</span><h3 class="font-bold text-slate-800 mt-1">${inv.partyName}</h3></div>
+              <div class="text-right"><span class="block text-base font-bold text-emerald-700">₹${inv.grandTotal.toFixed(2)}</span></div>
+            </div>
+            <div class="flex gap-2 pt-2 border-t">
+              <button onclick='generatePowerSourcePdf(${JSON.stringify(inv)})' class="bg-blue-600 text-white px-3 py-1 rounded font-bold text-xs">PDF</button>
+              <button onclick="editInvoice('${inv.invoiceNo}')" class="bg-amber-500 text-white px-3 py-1 rounded font-bold text-xs">Edit</button>
+              <button onclick="deleteInvoice('${inv.invoiceNo}')" class="bg-red-600 text-white px-3 py-1 rounded font-bold text-xs">Delete</button>
+            </div>
+          </div>
+        `).join('');
+    }
+
+    async function deleteInvoice(invoiceNo) {
+      if (!confirm(`Are you sure you want to delete Invoice ${invoiceNo}?`)) return;
+      const apiUrl = localStorage.getItem('gst_sheet_api_url');
+      try {
+        const res = await fetch(`${apiUrl}?action=delete&invoiceNo=${encodeURIComponent(invoiceNo)}`, { method: 'POST' });
+        const result = await res.json();
+        if (result.status === 'success') {
+          showToast(`Invoice ${invoiceNo} deleted successfully.`);
+          loadInvoices();
+        } else { throw new Error(result.message); }
+      } catch (err) { showToast('Failed to delete: ' + err.message, 'error'); }
+    }
+
+    // POWER SOURCE Style PDF Generator matching the uploaded PDF format precisely
+    function generatePowerSourcePdf(inv) {
+      const vendor = getVendorProfile();
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+
+      let y = 12;
+      
+      // Header: Power Source & GSTIN & TAX INVOICE title
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text(vendor.name, 14, y);
+      
+      doc.setFontSize(11);
+      doc.text("TAX INVOICE", 160, y, { align: "right" });
+      
+      y += 5;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(`GSTIN: ${vendor.gstin}`, 14, y);
+      
+      y += 4;
+      // Vendor Address
+      const splitVendorAddr = doc.splitTextToSize(vendor.address, 110);
+      doc.text(splitVendorAddr, 14, y);
+      y += (splitVendorAddr.length * 4);
+      
+      doc.text(`Mobile: ${vendor.phone}`, 14, y);
+      if (vendor.email) {
+        y += 4;
+        doc.text(`Email: ${vendor.email}`, 14, y);
+      }
+
+      y += 6;
+      doc.setLineWidth(0.4);
+      doc.line(14, y, 196, y);
+      
+      y += 6;
+      // Customer Details & Invoice Meta
+      doc.setFont("helvetica", "bold");
+      doc.text("Customer Details:", 14, y);
+      
+      doc.text("Invoice #:", 130, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(inv.invoiceNo, 165, y);
+
+      y += 4;
+      doc.setFont("helvetica", "bold");
+      doc.text(inv.partyName, 14, y);
+      
+      doc.setFont("helvetica", "bold");
+      doc.text("Invoice Date:", 130, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(inv.date, 165, y);
+
+      y += 4;
+      doc.setFont("helvetica", "bold");
+      doc.text(`GSTIN: ${inv.gstin || 'N/A'}`, 14, y);
+      
+      doc.setFont("helvetica", "bold");
+      doc.text("Place of Supply:", 130, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(inv.placeOfSupply || '27-MAHARASHTRA', 165, y);
+
+      y += 4;
+      doc.setFont("helvetica", "bold");
+      doc.text("Billing Address:", 14, y);
+      
+      doc.setFont("helvetica", "bold");
+      doc.text("Due Date:", 130, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(inv.dueDate || inv.date, 165, y);
+
+      y += 4;
+      const splitPartyAddr = doc.splitTextToSize(inv.partyAddress || 'Mumbai, Maharashtra', 105);
+      doc.setFont("helvetica", "normal");
+      doc.text(splitPartyAddr, 14, y);
+
+      y += Math.max(splitPartyAddr.length * 4, 8);
+      
+      // ORIGINAL FOR RECIPIENT & Reference
+      doc.setFont("helvetica", "bold");
+      doc.text("ORIGINAL FOR RECIPIENT", 14, y);
+      y += 5;
+      
+      if (inv.poReference) {
+        doc.text("Reference:", 14, y);
+        doc.setFont("helvetica", "normal");
+        const splitRef = doc.splitTextToSize(inv.poReference, 150);
+        doc.text(splitRef, 40, y);
+        y += (splitRef.length * 4) + 2;
+      }
+
+      // Table Header
+      y += 2;
+      doc.setFillColor(30, 58, 138);
+      doc.rect(14, y, 182, 7, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text("#", 17, y + 4.5);
+      doc.text("Item", 26, y + 4.5);
+      doc.text("Rate/Item", 110, y + 4.5);
+      doc.text("Qty", 132, y + 4.5);
+      doc.text("Taxable Value", 148, y + 4.5);
+      doc.text("Amount", 176, y + 4.5);
+
+      y += 7;
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "normal");
+
+      (inv.items || []).forEach((it, i) => {
+        const itemDesc = (it.itemName || 'Item') + (it.hsn ? `\n(HSN code ${it.hsn})` : '');
+        const splitDesc = doc.splitTextToSize(itemDesc, 80);
+        const rowHeight = Math.max(8, splitDesc.length * 4 + 4);
+
+        doc.text(String(i + 1), 17, y + 5);
+        doc.text(splitDesc, 26, y + 5);
+        doc.text(`₹${(it.unitPrice || 0).toFixed(2)}`, 110, y + 5);
+        doc.text(String(it.qty || 0), 132, y + 5);
+        doc.text(`₹${(it.taxable || 0).toFixed(2)}`, 148, y + 5);
+        doc.text(`₹${(it.afterTax || 0).toFixed(2)}`, 176, y + 5);
+
+        y += rowHeight;
+        doc.setLineWidth(0.2);
+        doc.line(14, y, 196, y);
+      });
+
+      y += 4;
+      doc.setFont("helvetica", "bold");
+      doc.text(`Total Items / Qty: ${inv.items.length}/${inv.items.reduce((s, x) => s + Number(x.qty || 0), 0)}`, 14, y);
+
+      y += 6;
+      // Tax Breakdown Summary Box
+      const halfGst = (inv.totalGst / 2).toFixed(2);
+      doc.text("Taxable Amount", 130, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(`₹${(inv.totalTaxable || 0).toFixed(2)}`, 190, y, { align: "right" });
+
+      y += 5;
+      doc.setFont("helvetica", "bold");
+      doc.text("CGST 9.0%", 130, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(`₹${halfGst}`, 190, y, { align: "right" });
+
+      y += 5;
+      doc.setFont("helvetica", "bold");
+      doc.text("SGST 9.0%", 130, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(`₹${halfGst}`, 190, y, { align: "right" });
+
+      y += 6;
+      doc.setLineWidth(0.4);
+      doc.line(125, y, 196, y);
+
+      y += 6;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("Total", 130, y);
+      doc.text(`₹${(inv.grandTotal || 0).toFixed(2)}`, 190, y, { align: "right" });
+
+      y += 8;
+      doc.setFontSize(9);
+      doc.text("Amount Payable:", 130, y);
+      doc.text(`₹${(inv.grandTotal || 0).toFixed(2)}`, 190, y, { align: "right" });
+
+      y += 10;
+      doc.setFont("helvetica", "bold");
+      doc.text("Bank Details:", 14, y);
+      y += 5;
+      doc.setFont("helvetica", "normal");
+      doc.text(`Bank: ${vendor.bank}`, 14, y);
+      doc.text(`For ${vendor.name}`, 130, y);
+
+      y += 5;
+      doc.text(`Account #: ${vendor.accNo}`, 14, y);
+
+      y += 5;
+      doc.text(`IFSC Code: ${vendor.ifsc}`, 14, y);
+
+      y += 5;
+      const splitBranch = doc.splitTextToSize(`Branch: ${vendor.branch}`, 85);
+      doc.text(splitBranch, 14, y);
+
+      y += 15;
+      doc.setFont("helvetica", "bold");
+      doc.text("Authorized Signatory", 155, y);
+
+      y += 6;
+      doc.setFont("helvetica", "bold");
+      doc.text("Notes:", 14, y);
+      y += 4;
+      doc.setFont("helvetica", "normal");
+      doc.text(inv.invoiceNotes || "Thank you for your business.", 14, y);
+
+      y += 10;
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text("This is a computer generated document and requires no signature.", 14, y);
+
+      doc.save(`Invoice_${inv.invoiceNo.replace(/\//g, '_')}.pdf`);
+    }
+
+    async function loadReport(type) {
+      const apiUrl = localStorage.getItem('gst_sheet_api_url');
+      if (!apiUrl) return;
+      document.getElementById('reportLoading').classList.remove('hidden');
+      try {
+        const res = await fetch(`${apiUrl}?type=${type}`);
+        const rows = await res.json();
+        document.getElementById('reportTableHead').innerHTML = type === 'hsn' ? `<th class="p-3">HSN</th><th class="p-3 text-right">Qty</th><th class="p-3 text-right">Total</th>` : `<th class="p-3">${type.toUpperCase()}</th><th class="p-3 text-right">Total</th>`;
+        document.getElementById('reportTableBody').innerHTML = rows.length === 0 ? `<tr><td colspan="3" class="p-6 text-center text-slate-400">No records.</td></tr>` :
+          rows.map(r => `<tr class="hover:bg-slate-50"><td class="p-3 font-bold">${r.label}</td>${type === 'hsn' ? `<td class="p-3 text-right">${r.qty}</td>` : ''}<td class="p-3 text-right font-bold text-emerald-700">₹${Number(r.total).toFixed(2)}</td></tr>`).join('');
+      } catch (err) { console.error(err); }
+      finally { document.getElementById('reportLoading').classList.add('hidden'); }
+    }
+  </script>
+</body>
+</html>
