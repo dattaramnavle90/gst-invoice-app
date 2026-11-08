@@ -685,28 +685,25 @@
       }).join('');
     }
 
-    async function deleteInvoice(invoiceNo) {
+   async function deleteInvoice(invoiceNo) {
       if (!confirm(`Are you sure you want to delete Invoice ${invoiceNo}?`)) return;
 
       const apiUrl = localStorage.getItem('gst_sheet_api_url');
       try {
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'deleteInvoice', invoiceNo })
-        });
+        // Using GET request for deletion to completely prevent POST fallback bugs
+        const res = await fetch(`${apiUrl}?action=delete&invoiceNo=${encodeURIComponent(invoiceNo)}`);
         const result = await res.json();
+        
         if (result.status === 'success') {
           alert(`Invoice ${invoiceNo} deleted successfully.`);
           loadInvoices();
         } else {
-          throw new Error(result.message);
+          throw new Error(result.message || 'Unknown error');
         }
       } catch (err) {
         alert('Failed to delete invoice: ' + err.message);
       }
     }
-
     function generatePdf(inv) {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
