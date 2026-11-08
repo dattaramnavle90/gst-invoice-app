@@ -8,7 +8,6 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>GST Invoice Pro</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Include jsPDF for standard GST invoice generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     body { -webkit-tap-highlight-color: transparent; font-family: system-ui, -apple-system, sans-serif; }
@@ -254,7 +253,6 @@
       if (tab === 'entry') loadCustomers();
     }
 
-    // ==================== CUSTOMER MASTER LOGIC ====================
     async function loadCustomers() {
       const apiUrl = localStorage.getItem('gst_sheet_api_url');
       if (!apiUrl) return;
@@ -340,7 +338,6 @@
       }
     }
 
-    // ==================== INVOICE ENTRY & EDIT LOGIC ====================
     function renderItems() {
       const container = document.getElementById('itemsContainer');
       container.innerHTML = '';
@@ -564,7 +561,6 @@
       }
     }
 
-    // ==================== INVOICES TAB & DELETE/EDIT ACTIONS ====================
     async function loadInvoices() {
       const apiUrl = localStorage.getItem('gst_sheet_api_url');
       if (!apiUrl) return;
@@ -705,7 +701,6 @@
         if (result.status === 'success') {
           alert(`Invoice ${invoiceNo} deleted successfully.`);
           
-          // Clear active form if we were editing this exact invoice
           const currentEditingNo = document.getElementById('invNo').value;
           if (currentEditingNo === invoiceNo) {
             resetForm();
@@ -720,7 +715,6 @@
       }
     }
 
-    // Standard GST Tax Invoice PDF Generator using jsPDF
     function generatePdf(inv) {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
@@ -789,7 +783,6 @@
       doc.save(`Invoice_${inv.invoiceNo}.pdf`);
     }
 
-    // ==================== GST REPORTS LOGIC ====================
     async function loadReport(type) {
       const apiUrl = localStorage.getItem('gst_sheet_api_url');
       if (!apiUrl) return;
