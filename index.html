@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1e3a8a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>GST Invoice Pro</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { -webkit-tap-highlight-color: transparent; font-family: system-ui, -apple-system, sans-serif; }
+    .active-tab { border-bottom: 3px solid #2563eb; color: #1d4ed8; font-weight: 700; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 pb-24">
+
+  <!-- Top App Bar -->
+  <header class="bg-blue-900 text-white p-4 shadow-md sticky top-0 z-20 flex justify-between items-center">
+    <div>
+      <h1 class="text-lg font-bold tracking-tight">GST Invoice & Reports</h1>
+      <p class="text-xs text-blue-200">Google Sheets Live Sync</p>
+    </div>
+    <button onclick="toggleSettings()" class="bg-blue-800 hover:bg-blue-700 px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-600">
+      ⚙️ API URL
+    </button>
+  </header>
+
+  <!-- API URL Configuration Modal -->
+  <div id="settingsBox" class="hidden bg-amber-50 border-b border-amber-300 p-4 shadow-inner">
+    <label class="block text-xs font-bold text-amber-900 uppercase mb-1">Google Apps Script Web App URL</label>
+    <input id="apiUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec"
+      class="w-full p-2.5 text-sm border border-amber-400 rounded-lg bg-white mb-2" />
+    <div class="flex justify-end gap-2">
+      <button onclick="saveApiUrl()" class="bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg">Save URL</button>
+    </div>
+  </div>
+
+  <!-- Navigation Tabs -->
+  <nav class="bg-white shadow-sm flex border-b border-slate-200 sticky top-[68px] z-10">
+    <button id="tab-entry" onclick="switchTab('entry')" class="flex-1 py-3 text-sm text-center active-tab">
+      ➕ New Invoice
+    </button>
+    <button id="tab-reports" onclick="switchTab('reports')" class="flex-1 py-3 text-sm text-center text-slate-500 font-medium">
+      📊 GST Reports
+    </button>
+  </nav>
+
+  <!-- ==================== TAB 1: NEW INVOICE ==================== -->
+  <main id="view-entry" class="p-4 max-w-lg mx-auto space-y-4">
+    
+    <!-- Invoice Header Details -->
+    <section class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3">
+      <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Invoice & Party Details</h2>
+      
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Invoice No *</label>
+          <input id="invNo" type="text" placeholder="INV-001" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Invoice Date *</label>
+          <input id="invDate" type="date" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Party / Customer Name *</label>
+        <input id="partyName" type="text" placeholder="e.g. Sharma Enterprises" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Party GSTIN</label>
+        <input id="gstin" type="text" maxlength="15" placeholder="27AAAAA0000A1Z5" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm uppercase focus:ring-2 focus:ring-blue-500 outline-none" />
+      </div>
+    </section>
+
+    <!-- Line Items Container -->
+    <div id="itemsContainer" class="space-y-3"></div>
+
+    <button onclick="addItem()" class="w-full py-3 border-2 border-dashed border-blue-400 text-blue-700 font-semibold rounded-xl text-sm hover:bg-blue-50 transition">
+      + Add Another Item
+    </button>
+
+    <!-- Grand Totals Summary Card -->
+    <section class="bg-slate-900 text-white p-4 rounded-xl shadow-md space-y-2">
+      <div class="flex justify-between text-sm text-slate-300">
+        <span>Total Taxable Amount:</span>
+        <span id="summaryTaxable" class="font-semibold">₹0.00</span>
+      </div>
+      <div class="flex justify-between text-sm text-slate-300">
+        <span>Total GST Amount:</span>
+        <span id="summaryGst" class="font-semibold">₹0.00</span>
+      </div>
+      <div class="border-t border-slate-700 pt-2 flex justify-between text-lg font-bold text-emerald-400">
+        <span>Grand Total (After Tax):</span>
+        <span id="summaryGrand">₹0.00</span>
+      </div>
+    </section>
+
+    <!-- Submit Button -->
+    <button id="submitBtn" onclick="submitInvoice()" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 rounded-xl shadow-lg text-base transition">
+      Submit Invoice to Sheet
+    </button>
+    <p id="statusMessage" class="text-center text-sm font-medium"></p>
+  </main>
+
+  <!-- ==================== TAB 2: REPORTS ==================== -->
+  <main id="view-reports" class="hidden p-4 max-w-lg mx-auto space-y-4">
+    <!-- Report Filter Buttons -->
+    <div class="grid grid-cols-3 gap-2 bg-slate-200 p-1 rounded-xl">
+      <button onclick="loadReport('hsn')" id="rep-btn-hsn" class="py-2 text-xs font-bold rounded-lg bg-white text-blue-700 shadow-sm">HSN Wise</button>
+      <button onclick="loadReport('month')" id="rep-btn-month" class="py-2 text-xs font-bold rounded-lg text-slate-600">Month Wise</button>
+      <button onclick="loadReport('quarter')" id="rep-btn-quarter" class="py-2 text-xs font-bold rounded-lg text-slate-600">Quarter Wise</button>
+    </div>
+
+    <div id="reportLoading" class="hidden text-center py-8 text-sm text-slate-500">
+      Fetching live data from Google Sheets...
+    </div>
+
+    <!-- Report Results Table -->
+    <div id="reportContent" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr id="reportTableHead" class="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500"></tr>
+          </thead>
+          <tbody id="reportTableBody" class="divide-y divide-slate-100 text-sm"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Initialize App State
+    let items = [{ hsn: '', unitPrice: '', qty: 1, gstPercent: 18 }];
+    const GST_RATES = [0, 5, 12, 18, 28];
+
+    window.onload = () => {
+      document.getElementById('invDate').valueAsDate = new Date();
+      const savedUrl = localStorage.getItem('gst_sheet_api_url');
+      if (savedUrl) {
+        document.getElementById('apiUrlInput').value = savedUrl;
+      } else {
+        document.getElementById('settingsBox').classList.remove('hidden');
+      }
+      renderItems();
+    };
+
+    function toggleSettings() {
+      document.getElementById('settingsBox').classList.toggle('hidden');
+    }
+
+    function saveApiUrl() {
+      const url = document.getElementById('apiUrlInput').value.trim();
+      if (!url.startsWith('https://script.google.com/')) {
+        alert('Please enter a valid Google Apps Script Web App URL.');
+        return;
+      }
+      localStorage.setItem('gst_sheet_api_url', url);
+      document.getElementById('settingsBox').classList.add('hidden');
+      alert('API URL Saved!');
+    }
+
+    function switchTab(tab) {
+      document.getElementById('view-entry').classList.toggle('hidden', tab !== 'entry');
+      document.getElementById('view-reports').classList.toggle('hidden', tab !== 'reports');
+      document.getElementById('tab-entry').className = tab === 'entry' ? 'flex-1 py-3 text-sm text-center active-tab' : 'flex-1 py-3 text-sm text-center text-slate-500 font-medium';
+      document.getElementById('tab-reports').className = tab === 'reports' ? 'flex-1 py-3 text-sm text-center active-tab' : 'flex-1 py-3 text-sm text-center text-slate-500 font-medium';
+      if (tab === 'reports') loadReport('hsn');
+    }
+
+    // Dynamic Item Rendering & Live Auto-Calculation
+    function renderItems() {
+      const container = document.getElementById('itemsContainer');
+      container.innerHTML = '';
+
+      items.forEach((item, idx) => {
+        const price = parseFloat(item.unitPrice) || 0;
+        const qty = parseFloat(item.qty) || 0;
+        const taxable = price * qty;
+        const gstAmt = taxable * (item.gstPercent / 100);
+        const afterTax = taxable + gstAmt;
+
+        const rateButtons = GST_RATES.map(rate => `
+          <button type="button" onclick="updateItem(${idx}, 'gstPercent', ${rate})"
+            class="flex-1 py-1.5 text-xs font-bold rounded-lg border ${item.gstPercent === rate ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 text-slate-600 border-slate-300'}">
+            ${rate}%
+          </button>
+        `).join('');
+
+        const card = document.createElement('div');
+        card.className = 'bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-3';
+        card.innerHTML = `
+          <div class="flex justify-between items-center">
+            <span class="text-xs font-bold uppercase text-blue-700">Item #${idx + 1}</span>
+            ${items.length > 1 ? `<button onclick="removeItem(${idx})" class="text-xs text-red-500 font-semibold">Remove</button>` : ''}
+          </div>
+          
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">HSN Code *</label>
+              <input type="text" value="${item.hsn}" oninput="updateItem(${idx}, 'hsn', this.value)" placeholder="8471"
+                class="w-full p-2 border border-slate-300 rounded-lg text-sm" />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Unit Price *</label>
+              <input type="number" step="0.01" value="${item.unitPrice}" oninput="updateItem(${idx}, 'unitPrice', this.value)" placeholder="0.00"
+                class="w-full p-2 border border-slate-300 rounded-lg text-sm" />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500 mb-1">Qty *</label>
+              <input type="number" value="${item.qty}" oninput="updateItem(${idx}, 'qty', this.value)" placeholder="1"
+                class="w-full p-2 border border-slate-300 rounded-lg text-sm" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Select GST %</label>
+            <div class="flex gap-1.5">${rateButtons}</div>
+          </div>
+
+          <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-200 grid grid-cols-3 text-center">
+            <div>
+              <span class="block text-[10px] text-slate-400 uppercase">Taxable</span>
+              <span id="item-taxable-${idx}" class="text-xs font-bold text-slate-700">₹${taxable.toFixed(2)}</span>
+            </div>
+            <div class="border-x border-slate-200">
+              <span class="block text-[10px] text-slate-400 uppercase">GST (${item.gstPercent}%)</span>
+              <span id="item-gst-${idx}" class="text-xs font-bold text-amber-700">₹${gstAmt.toFixed(2)}</span>
+            </div>
+            <div>
+              <span class="block text-[10px] text-slate-400 uppercase">After Tax</span>
+              <span id="item-after-${idx}" class="text-xs font-bold text-emerald-700">₹${afterTax.toFixed(2)}</span>
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      recalculateTotals();
+    }
+
+    function updateItem(idx, field, value) {
+      items[idx][field] = value;
+      if (field === 'gstPercent') {
+        renderItems(); // Re-render buttons when GST chip clicked
+      } else {
+        // Update numbers directly without losing input focus
+        const price = parseFloat(items[idx].unitPrice) || 0;
+        const qty = parseFloat(items[idx].qty) || 0;
+        const taxable = price * qty;
+        const gstAmt = taxable * (items[idx].gstPercent / 100);
+        const afterTax = taxable + gstAmt;
+
+        document.getElementById(`item-taxable-${idx}`).innerText = `₹${taxable.toFixed(2)}`;
+        document.getElementById(`item-gst-${idx}`).innerText = `₹${gstAmt.toFixed(2)}`;
+        document.getElementById(`item-after-${idx}`).innerText = `₹${afterTax.toFixed(2)}`;
+        recalculateTotals();
+      }
+    }
+
+    function addItem() {
+      items.push({ hsn: '', unitPrice: '', qty: 1, gstPercent: 18 });
+      renderItems();
+    }
+
+    function removeItem(idx) {
+      items.splice(idx, 1);
+      renderItems();
+    }
+
+    function recalculateTotals() {
+      let totTaxable = 0, totGst = 0, totGrand = 0;
+      items.forEach(item => {
+        const taxable = (parseFloat(item.unitPrice) || 0) * (parseFloat(item.qty) || 0);
+        const gst = taxable * (item.gstPercent / 100);
+        totTaxable += taxable;
+        totGst += gst;
+        totGrand += (taxable + gst);
+      });
+      document.getElementById('summaryTaxable').innerText = `₹${totTaxable.toFixed(2)}`;
+      document.getElementById('summaryGst').innerText = `₹${totGst.toFixed(2)}`;
+      document.getElementById('summaryGrand').innerText = `₹${totGrand.toFixed(2)}`;
+      return { totTaxable, totGst, totGrand };
+    }
+
+    // Submit Invoice to Google Sheet
+    async function submitInvoice() {
+      const apiUrl = localStorage.getItem('gst_sheet_api_url');
+      if (!apiUrl) {
+        alert('Please click "⚙️ API URL" at the top right and paste your Google Apps Script URL first.');
+        return;
+      }
+
+      const invoiceNo = document.getElementById('invNo').value.trim();
+      const date = document.getElementById('invDate').value;
+      const partyName = document.getElementById('partyName').value.trim();
+      const gstin = document.getElementById('gstin').value.trim().toUpperCase();
+
+      if (!invoiceNo || !date || !partyName) {
+        alert('Please fill Invoice No, Date, and Party Name.');
+        return;
+      }
+
+      const totals = recalculateTotals();
+      const formattedItems = items.map(it => {
+        const taxable = (parseFloat(it.unitPrice) || 0) * (parseFloat(it.qty) || 0);
+        const gstAmount = taxable * (it.gstPercent / 100);
+        return {
+          hsn: it.hsn || 'N/A',
+          unitPrice: parseFloat(it.unitPrice) || 0,
+          qty: parseFloat(it.qty) || 0,
+          gstPercent: it.gstPercent,
+          taxable: Number(taxable.toFixed(2)),
+          gstAmount: Number(gstAmount.toFixed(2)),
+          afterTax: Number((taxable + gstAmount).toFixed(2))
+        };
+      });
+
+      const payload = {
+        invoiceNo, date, partyName, gstin,
+        totalTaxable: Number(totals.totTaxable.toFixed(2)),
+        totalGst: Number(totals.totGst.toFixed(2)),
+        grandTotal: Number(totals.totGrand.toFixed(2)),
+        items: formattedItems
+      };
+
+      const btn = document.getElementById('submitBtn');
+      const status = document.getElementById('statusMessage');
+      btn.disabled = true;
+      btn.innerText = 'Saving to Google Sheet...';
+      status.innerText = '';
+
+      try {
+        // Using text/plain avoids CORS preflight issues with Google Apps Script
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+
+        if (result.status === 'success') {
+          status.className = 'text-center text-sm font-bold text-emerald-600';
+          status.innerText = `✅ Invoice ${invoiceNo} saved to Google Sheets!`;
+          // Reset form for next entry
+          document.getElementById('invNo').value = '';
+          document.getElementById('partyName').value = '';
+          document.getElementById('gstin').value = '';
+          items = [{ hsn: '', unitPrice: '', qty: 1, gstPercent: 18 }];
+          renderItems();
+        } else {
+          throw new Error(result.message || 'Unknown error');
+        }
+      } catch (err) {
+        status.className = 'text-center text-sm font-bold text-red-600';
+        status.innerText = '❌ Error saving invoice: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Submit Invoice to Sheet';
+      }
+    }
+
+    // Fetch & Render Reports (HSN, Month, Quarter)
+    async function loadReport(type) {
+      const apiUrl = localStorage.getItem('gst_sheet_api_url');
+      if (!apiUrl) {
+        alert('Please set your API URL in settings first.');
+        return;
+      }
+
+      ['hsn', 'month', 'quarter'].forEach(t => {
+        document.getElementById(`rep-btn-${t}`).className = t === type
+          ? 'py-2 text-xs font-bold rounded-lg bg-white text-blue-700 shadow-sm'
+          : 'py-2 text-xs font-bold rounded-lg text-slate-600';
+      });
+
+      const loader = document.getElementById('reportLoading');
+      const thead = document.getElementById('reportTableHead');
+      const tbody = document.getElementById('reportTableBody');
+      loader.classList.remove('hidden');
+      tbody.innerHTML = '';
+
+      try {
+        const res = await fetch(`${apiUrl}?type=${type}`);
+        const rows = await res.json();
+
+        if (type === 'hsn') {
+          thead.innerHTML = `<th class="p-3">HSN</th><th class="p-3 text-right">Qty</th><th class="p-3 text-right">Taxable</th><th class="p-3 text-right">GST</th><th class="p-3 text-right">Total</th>`;
+        } else {
+          const title = type === 'month' ? 'Month' : 'Quarter';
+          thead.innerHTML = `<th class="p-3">${title}</th><th class="p-3 text-right">Taxable</th><th class="p-3 text-right">GST</th><th class="p-3 text-right">Total</th>`;
+        }
+
+        if (rows.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">No records found yet.</td></tr>`;
+        } else {
+          rows.forEach(r => {
+            const qtyCell = type === 'hsn' ? `<td class="p-3 text-right">${r.qty}</td>` : '';
+            tbody.innerHTML += `
+              <tr class="hover:bg-slate-50">
+                <td class="p-3 font-bold text-slate-800">${r.label}</td>
+                ${qtyCell}
+                <td class="p-3 text-right">₹${Number(r.taxable).toFixed(2)}</td>
+                <td class="p-3 text-right text-amber-700">₹${Number(r.gst).toFixed(2)}</td>
+                <td class="p-3 text-right font-bold text-emerald-700">₹${Number(r.total).toFixed(2)}</td>
+              </tr>
+            `;
+          });
+        }
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">Failed to load report: ${err.message}</td></tr>`;
+      } finally {
+        loader.classList.add('hidden');
+      }
+    }
+  </script>
+</body>
+</html>
