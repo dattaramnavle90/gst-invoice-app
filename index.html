@@ -66,7 +66,7 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-semibold text-slate-600 mb-1">Invoice No *</label>
-          <input id="invNo" type="text" placeholder="26/11/640" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm" />
+          <input id="invNo" type="text" placeholder="26/03/522" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm" />
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-600 mb-1">Invoice Date *</label>
@@ -114,7 +114,7 @@
 
       <div>
         <label class="block text-xs font-semibold text-slate-600 mb-1">Invoice Notes / Terms</label>
-        <input id="invoiceNotes" type="text" value="80% Advance and 20% job again delivery." class="w-full p-2.5 border border-slate-300 rounded-lg text-sm" />
+        <input id="invoiceNotes" type="text" value="Thank you for your business." class="w-full p-2.5 border border-slate-300 rounded-lg text-sm" />
       </div>
     </section>
 
@@ -127,15 +127,15 @@
     <section class="bg-slate-900 text-white p-4 rounded-xl shadow-md space-y-2">
       <div class="flex justify-between text-sm text-slate-300">
         <span>Total Taxable Amount:</span>
-        <span id="summaryTaxable" class="font-semibold">₹0.00</span>
+        <span id="summaryTaxable" class="font-semibold">Rs. 0.00</span>
       </div>
       <div class="flex justify-between text-sm text-slate-300">
         <span>Total GST Amount:</span>
-        <span id="summaryGst" class="font-semibold">₹0.00</span>
+        <span id="summaryGst" class="font-semibold">Rs. 0.00</span>
       </div>
       <div class="border-t border-slate-700 pt-2 flex justify-between text-lg font-bold text-emerald-400">
         <span>Grand Total (After Tax):</span>
-        <span id="summaryGrand">₹0.00</span>
+        <span id="summaryGrand">Rs. 0.00</span>
       </div>
     </section>
 
@@ -158,7 +158,7 @@
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-600 mb-1">Billing Address</label>
-        <textarea id="newCustAddress" rows="2" placeholder="501, 5th Floor, Ackruti Centre Point..." class="w-full p-2.5 border border-slate-300 rounded-lg text-sm"></textarea>
+        <textarea id="newCustAddress" rows="2" placeholder="Mumbai, Maharashtra" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm"></textarea>
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-600 mb-1">Phone Number</label>
@@ -280,7 +280,7 @@
   </div>
 
   <script>
-    let items = [{ hsn: '995419', itemName: '', unitPrice: '', qty: 1, gstPercent: 18 }];
+    let items = [{ hsn: '4569', itemName: 'Item 1', unitPrice: '125.00', qty: 10, gstPercent: 18 }];
     let allInvoices = [];
     let savedCustomers = [];
     const GST_RATES = [0, 5, 12, 18, 28];
@@ -467,13 +467,13 @@
             
             <div>
               <label class="block text-[11px] font-semibold text-slate-500 mb-1">Item Description</label>
-              <textarea rows="2" oninput="items[${idx}].itemName = this.value" placeholder="e.g. Modular Celling for F&B Lab and Seating" class="w-full p-2 border rounded-lg text-sm">${item.itemName || ''}</textarea>
+              <textarea rows="2" oninput="items[${idx}].itemName = this.value" placeholder="e.g. Item 1" class="w-full p-2 border rounded-lg text-sm">${item.itemName || ''}</textarea>
             </div>
 
             <div class="grid grid-cols-3 gap-2">
               <div>
                 <label class="block text-[11px] font-semibold text-slate-500 mb-1">HSN / SAC</label>
-                <input type="text" value="${item.hsn || ''}" oninput="items[${idx}].hsn = this.value" placeholder="995419" class="w-full p-2 border rounded-lg text-sm" />
+                <input type="text" value="${item.hsn || ''}" oninput="items[${idx}].hsn = this.value" placeholder="4569" class="w-full p-2 border rounded-lg text-sm" />
               </div>
               <div>
                 <label class="block text-[11px] font-semibold text-slate-500 mb-1">Rate / Item</label>
@@ -491,9 +491,9 @@
             </div>
 
             <div class="bg-slate-50 p-2.5 rounded-lg border grid grid-cols-3 text-center text-xs">
-              <div>Taxable: <b id="calc-taxable-${idx}">₹${taxable.toFixed(2)}</b></div>
-              <div>GST: <b id="calc-gst-${idx}">₹${gstAmt.toFixed(2)}</b></div>
-              <div>Total: <b id="calc-total-${idx}">₹${afterTax.toFixed(2)}</b></div>
+              <div>Taxable: <b id="calc-taxable-${idx}">Rs. ${taxable.toFixed(2)}</b></div>
+              <div>GST: <b id="calc-gst-${idx}">Rs. ${gstAmt.toFixed(2)}</b></div>
+              <div>Total: <b id="calc-total-${idx}">Rs. ${afterTax.toFixed(2)}</b></div>
             </div>
           </div>
         `;
@@ -509,9 +509,9 @@
       const gstAmt = taxable * (item.gstPercent / 100);
       const afterTax = taxable + gstAmt;
 
-      document.getElementById(`calc-taxable-${idx}`).innerText = `₹${taxable.toFixed(2)}`;
-      document.getElementById(`calc-gst-${idx}`).innerText = `₹${gstAmt.toFixed(2)}`;
-      document.getElementById(`calc-total-${idx}`).innerText = `₹${afterTax.toFixed(2)}`;
+      document.getElementById(`calc-taxable-${idx}`).innerText = `Rs. ${taxable.toFixed(2)}`;
+      document.getElementById(`calc-gst-${idx}`).innerText = `Rs. ${gstAmt.toFixed(2)}`;
+      document.getElementById(`calc-total-${idx}`).innerText = `Rs. ${afterTax.toFixed(2)}`;
       recalculateTotals();
     }
 
@@ -520,7 +520,7 @@
       renderItems();
     }
 
-    function addItem() { items.push({ hsn: '995419', itemName: '', unitPrice: '', qty: 1, gstPercent: 18 }); renderItems(); }
+    function addItem() { items.push({ hsn: '4569', itemName: '', unitPrice: '', qty: 1, gstPercent: 18 }); renderItems(); }
     function removeItem(idx) { items.splice(idx, 1); renderItems(); }
 
     function recalculateTotals() {
@@ -530,9 +530,9 @@
         const gst = taxable * (it.gstPercent / 100);
         totTaxable += taxable; totGst += gst; totGrand += taxable + gst;
       });
-      document.getElementById('summaryTaxable').innerText = `₹${totTaxable.toFixed(2)}`;
-      document.getElementById('summaryGst').innerText = `₹${totGst.toFixed(2)}`;
-      document.getElementById('summaryGrand').innerText = `₹${totGrand.toFixed(2)}`;
+      document.getElementById('summaryTaxable').innerText = `Rs. ${totTaxable.toFixed(2)}`;
+      document.getElementById('summaryGst').innerText = `Rs. ${totGst.toFixed(2)}`;
+      document.getElementById('summaryGrand').innerText = `Rs. ${totGrand.toFixed(2)}`;
       return { totTaxable, totGst, totGrand };
     }
 
@@ -543,7 +543,7 @@
       document.getElementById('dueDate').valueAsDate = new Date();
       document.getElementById('poReference').value = '';
       document.getElementById('placeOfSupply').value = '27-MAHARASHTRA';
-      document.getElementById('invoiceNotes').value = '80% Advance and 20% job again delivery.';
+      document.getElementById('invoiceNotes').value = 'Thank you for your business.';
       
       document.getElementById('partyName').value = '';
       document.getElementById('partyName').disabled = false;
@@ -557,7 +557,7 @@
       document.getElementById('formTitle').innerText = 'New Invoice Details';
       document.getElementById('cancelEditBtn').classList.add('hidden');
       document.getElementById('submitBtn').innerText = 'Submit Invoice to Sheet';
-      items = [{ hsn: '995419', itemName: '', unitPrice: '', qty: 1, gstPercent: 18 }];
+      items = [{ hsn: '4569', itemName: '', unitPrice: '', qty: 1, gstPercent: 18 }];
       renderItems();
     }
 
@@ -609,7 +609,7 @@
         totalGst: Number(totals.totGst.toFixed(2)),
         grandTotal: Number(totals.totGrand.toFixed(2)),
         items: items.map(it => ({
-          hsn: it.hsn || '995419', itemName: it.itemName || '', unitPrice: parseFloat(it.unitPrice) || 0, qty: parseFloat(it.qty) || 0,
+          hsn: it.hsn || '4569', itemName: it.itemName || '', unitPrice: parseFloat(it.unitPrice) || 0, qty: parseFloat(it.qty) || 0,
           gstPercent: it.gstPercent, taxable: Number(((it.unitPrice||0)*(it.qty||0)).toFixed(2)),
           gstAmount: Number(((it.unitPrice||0)*(it.qty||0)*(it.gstPercent/100)).toFixed(2)),
           afterTax: Number(((it.unitPrice||0)*(it.qty||0)*(1 + it.gstPercent/100)).toFixed(2))
@@ -677,7 +677,7 @@
           <div class="bg-white rounded-xl shadow-sm border p-4 space-y-2">
             <div class="flex justify-between items-start">
               <div><span class="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded">${inv.invoiceNo}</span><span class="text-xs text-slate-400 ml-2">${inv.date}</span><h3 class="font-bold text-slate-800 mt-1">${inv.partyName}</h3></div>
-              <div class="text-right"><span class="block text-base font-bold text-emerald-700">₹${inv.grandTotal.toFixed(2)}</span></div>
+              <div class="text-right"><span class="block text-base font-bold text-emerald-700">Rs. ${inv.grandTotal.toFixed(2)}</span></div>
             </div>
             <div class="flex gap-2 pt-2 border-t">
               <button onclick='generatePowerSourcePdf(${JSON.stringify(inv)})' class="bg-blue-600 text-white px-3 py-1 rounded font-bold text-xs">PDF</button>
@@ -699,6 +699,68 @@
           loadInvoices();
         } else { throw new Error(result.message); }
       } catch (err) { showToast('Failed to delete: ' + err.message, 'error'); }
+    }
+
+    // Number to words helper for Indian Currency
+    function numberToWords(num) {
+      if (isNaN(num) || num === 0) return "Zero Rupees Only";
+      let a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+      let b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+      function convert(n) {
+        if (n < 20) return a[n];
+        let digit = n % 10;
+        if (n < 100) return b[Math.floor(n / 10)] + (digit ? ' ' + a[digit] : '');
+        if (n < 1000) return a[Math.floor(n / 100)] + 'Hundred ' + (n % 100 === 0 ? '' : 'and ' + convert(n % 100));
+        return '';
+      }
+
+      let n = Math.floor(num);
+      let paise = Math.round((num - n) * 100);
+      
+      let str = '';
+      if (n >= 10000000) {
+        str += convert(Math.floor(n / 10000000)) + 'Crore ';
+        n %= 10000000;
+      }
+      if (n >= 100000) {
+        str += convert(Math.floor(n / 100000)) + 'Lakh ';
+        n %= 100000;
+      }
+      if (n >= 1000) {
+        str += convert(Math.floor(n / 1000)) + 'Thousand ';
+        n %= 1000;
+      }
+      if (n >= 100) {
+        str += convert(Math.floor(n / 100)) + 'Hundred ';
+        n %= 100;
+        if (n > 0) str += 'and ';
+      }
+      if (n > 0) {
+        str += convert(n);
+      }
+      
+      let result = 'INR ' + str.trim() + ' Rupees';
+      if (paise > 0) {
+        result += ' and ' + convert(paise) + ' Paise';
+      }
+      return result + ' Only.';
+    }
+
+    // Clean date formatter (removes time, outputs DD MMM YYYY)
+    function formatDateClean(dateStr) {
+      if (!dateStr) return '';
+      try {
+        let d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+          let day = String(d.getDate()).padStart(2, '0');
+          let months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          let mon = months[d.getMonth()];
+          let yr = d.getFullYear();
+          return `${day} ${mon} ${yr}`;
+        }
+      } catch(e) {}
+      return String(dateStr).split('T')[0].split(' ')[0];
     }
 
     // POWER SOURCE Style PDF Generator matching the uploaded PDF format precisely
@@ -754,7 +816,7 @@
       doc.setFont("helvetica", "bold");
       doc.text("Invoice Date:", 130, y);
       doc.setFont("helvetica", "normal");
-      doc.text(inv.date, 165, y);
+      doc.text(formatDateClean(inv.date), 165, y);
 
       y += 4;
       doc.setFont("helvetica", "bold");
@@ -772,7 +834,7 @@
       doc.setFont("helvetica", "bold");
       doc.text("Due Date:", 130, y);
       doc.setFont("helvetica", "normal");
-      doc.text(inv.dueDate || inv.date, 165, y);
+      doc.text(formatDateClean(inv.dueDate || inv.date), 165, y);
 
       y += 4;
       const splitPartyAddr = doc.splitTextToSize(inv.partyAddress || 'Mumbai, Maharashtra', 105);
@@ -812,17 +874,19 @@
       doc.setTextColor(0, 0, 0);
       doc.setFont("helvetica", "normal");
 
+      let totalQtyCount = 0;
       (inv.items || []).forEach((it, i) => {
         const itemDesc = (it.itemName || 'Item') + (it.hsn ? `\n(HSN code ${it.hsn})` : '');
         const splitDesc = doc.splitTextToSize(itemDesc, 80);
         const rowHeight = Math.max(8, splitDesc.length * 4 + 4);
+        totalQtyCount += Number(it.qty || 0);
 
         doc.text(String(i + 1), 17, y + 5);
         doc.text(splitDesc, 26, y + 5);
-        doc.text(`₹${(it.unitPrice || 0).toFixed(2)}`, 110, y + 5);
+        doc.text(`Rs. ${(it.unitPrice || 0).toFixed(2)}`, 110, y + 5);
         doc.text(String(it.qty || 0), 132, y + 5);
-        doc.text(`₹${(it.taxable || 0).toFixed(2)}`, 148, y + 5);
-        doc.text(`₹${(it.afterTax || 0).toFixed(2)}`, 176, y + 5);
+        doc.text(`Rs. ${(it.taxable || 0).toFixed(2)}`, 148, y + 5);
+        doc.text(`Rs. ${(it.afterTax || 0).toFixed(2)}`, 176, y + 5);
 
         y += rowHeight;
         doc.setLineWidth(0.2);
@@ -831,44 +895,61 @@
 
       y += 4;
       doc.setFont("helvetica", "bold");
-      doc.text(`Total Items / Qty: ${inv.items.length}/${inv.items.reduce((s, x) => s + Number(x.qty || 0), 0)}`, 14, y);
+      doc.text(`Total Items / Qty: ${inv.items.length}/${totalQtyCount}`, 14, y);
 
-      y += 6;
-      // Tax Breakdown Summary Box
+      // Save top of totals and left side for amount in words
+      let totalsStartY = y + 6;
+
+      // Tax Breakdown Summary Box (Right Side)
+      let summaryY = totalsStartY;
       const halfGst = (inv.totalGst / 2).toFixed(2);
-      doc.text("Taxable Amount", 130, y);
+      
+      doc.text("Taxable Amount", 130, summaryY);
       doc.setFont("helvetica", "normal");
-      doc.text(`₹${(inv.totalTaxable || 0).toFixed(2)}`, 190, y, { align: "right" });
+      doc.text(`Rs. ${(inv.totalTaxable || 0).toFixed(2)}`, 190, summaryY, { align: "right" });
 
-      y += 5;
+      summaryY += 5;
       doc.setFont("helvetica", "bold");
-      doc.text("CGST 9.0%", 130, y);
+      doc.text("CGST 9.0%", 130, summaryY);
       doc.setFont("helvetica", "normal");
-      doc.text(`₹${halfGst}`, 190, y, { align: "right" });
+      doc.text(`Rs. ${halfGst}`, 190, summaryY, { align: "right" });
 
-      y += 5;
+      summaryY += 5;
       doc.setFont("helvetica", "bold");
-      doc.text("SGST 9.0%", 130, y);
+      doc.text("SGST 9.0%", 130, summaryY);
       doc.setFont("helvetica", "normal");
-      doc.text(`₹${halfGst}`, 190, y, { align: "right" });
+      doc.text(`Rs. ${halfGst}`, 190, summaryY, { align: "right" });
 
-      y += 6;
+      summaryY += 6;
       doc.setLineWidth(0.4);
-      doc.line(125, y, 196, y);
+      doc.line(125, summaryY, 196, summaryY);
 
-      y += 6;
+      summaryY += 6;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text("Total", 130, y);
-      doc.text(`₹${(inv.grandTotal || 0).toFixed(2)}`, 190, y, { align: "right" });
+      doc.text("Total", 130, summaryY);
+      doc.text(`Rs. ${(inv.grandTotal || 0).toFixed(2)}`, 190, summaryY, { align: "right" });
 
-      y += 8;
+      summaryY += 8;
       doc.setFontSize(9);
-      doc.text("Amount Payable:", 130, y);
-      doc.text(`₹${(inv.grandTotal || 0).toFixed(2)}`, 190, y, { align: "right" });
+      doc.text("Amount Payable:", 130, summaryY);
+      doc.text(`Rs. ${(inv.grandTotal || 0).toFixed(2)}`, 190, summaryY, { align: "right" });
 
-      y += 10;
+      // Left Side: Amount in Words placed below Amount Payable area on left side
+      let wordsY = totalsStartY;
       doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.text("Total amount (in words):", 14, wordsY);
+      wordsY += 4;
+      doc.setFont("helvetica", "normal");
+      const splitWords = doc.splitTextToSize(numberToWords(inv.grandTotal || 0), 105);
+      doc.text(splitWords, 14, wordsY);
+
+      // Bank Details & Signatory below
+      y = Math.max(summaryY + 12, wordsY + (splitWords.length * 4) + 8);
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
       doc.text("Bank Details:", 14, y);
       y += 5;
       doc.setFont("helvetica", "normal");
@@ -885,7 +966,7 @@
       const splitBranch = doc.splitTextToSize(`Branch: ${vendor.branch}`, 85);
       doc.text(splitBranch, 14, y);
 
-      y += 15;
+      y += 12;
       doc.setFont("helvetica", "bold");
       doc.text("Authorized Signatory", 155, y);
 
@@ -896,7 +977,7 @@
       doc.setFont("helvetica", "normal");
       doc.text(inv.invoiceNotes || "Thank you for your business.", 14, y);
 
-      y += 10;
+      y += 8;
       doc.setFontSize(8);
       doc.setTextColor(100, 100, 100);
       doc.text("This is a computer generated document and requires no signature.", 14, y);
@@ -913,7 +994,7 @@
         const rows = await res.json();
         document.getElementById('reportTableHead').innerHTML = type === 'hsn' ? `<th class="p-3">HSN</th><th class="p-3 text-right">Qty</th><th class="p-3 text-right">Total</th>` : `<th class="p-3">${type.toUpperCase()}</th><th class="p-3 text-right">Total</th>`;
         document.getElementById('reportTableBody').innerHTML = rows.length === 0 ? `<tr><td colspan="3" class="p-6 text-center text-slate-400">No records.</td></tr>` :
-          rows.map(r => `<tr class="hover:bg-slate-50"><td class="p-3 font-bold">${r.label}</td>${type === 'hsn' ? `<td class="p-3 text-right">${r.qty}</td>` : ''}<td class="p-3 text-right font-bold text-emerald-700">₹${Number(r.total).toFixed(2)}</td></tr>`).join('');
+          rows.map(r => `<tr class="hover:bg-slate-50"><td class="p-3 font-bold">${r.label}</td>${type === 'hsn' ? `<td class="p-3 text-right">${r.qty}</td>` : ''}<td class="p-3 text-right font-bold text-emerald-700">Rs. ${Number(r.total).toFixed(2)}</td></tr>`).join('');
       } catch (err) { console.error(err); }
       finally { document.getElementById('reportLoading').classList.add('hidden'); }
     }
