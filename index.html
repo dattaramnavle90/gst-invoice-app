@@ -565,8 +565,8 @@
       const inv = allInvoices.find(i => i.invoiceNo === invNo);
       if (!inv) return;
       document.getElementById('invNo').value = inv.invoiceNo;
-      document.getElementById('invDate').value = inv.date;
-      if (inv.dueDate) document.getElementById('dueDate').value = inv.dueDate;
+      document.getElementById('invDate').value = formatDateForInput(inv.date);
+      if (inv.dueDate) document.getElementById('dueDate').value = formatDateForInput(inv.dueDate);
       if (inv.placeOfSupply) document.getElementById('placeOfSupply').value = inv.placeOfSupply;
       if (inv.poReference) document.getElementById('poReference').value = inv.poReference;
       if (inv.invoiceNotes) document.getElementById('invoiceNotes').value = inv.invoiceNotes;
@@ -676,16 +676,21 @@
         filtered.map((inv, idx) => `
           <div class="bg-white rounded-xl shadow-sm border p-4 space-y-2">
             <div class="flex justify-between items-start">
-              <div><span class="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded">${inv.invoiceNo}</span><span class="text-xs text-slate-400 ml-2">${inv.date}</span><h3 class="font-bold text-slate-800 mt-1">${inv.partyName}</h3></div>
-              <div class="text-right"><span class="block text-base font-bold text-emerald-700">Rs. ${inv.grandTotal.toFixed(2)}</span></div>
+              <div><span class="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded">${inv.invoiceNo}</span><span class="text-xs text-slate-400 ml-2">${formatDateClean(inv.date)}</span><h3 class="font-bold text-slate-800 mt-1">${inv.partyName}</h3></div>
+              <div class="text-right"><span class="block text-base font-bold text-emerald-700">Rs. ${Number(inv.grandTotal || 0).toFixed(2)}</span></div>
             </div>
             <div class="flex gap-2 pt-2 border-t">
-              <button onclick='generatePowerSourcePdf(${JSON.stringify(inv)})' class="bg-blue-600 text-white px-3 py-1 rounded font-bold text-xs">PDF</button>
+              <button onclick="downloadInvoicePdfByIndex('${inv.invoiceNo}')" class="bg-blue-600 text-white px-3 py-1 rounded font-bold text-xs">PDF</button>
               <button onclick="editInvoice('${inv.invoiceNo}')" class="bg-amber-500 text-white px-3 py-1 rounded font-bold text-xs">Edit</button>
               <button onclick="deleteInvoice('${inv.invoiceNo}')" class="bg-red-600 text-white px-3 py-1 rounded font-bold text-xs">Delete</button>
             </div>
           </div>
         `).join('');
+    }
+
+    function downloadInvoicePdfByIndex(invNo) {
+      const inv = allInvoices.find(i => i.invoiceNo === invNo);
+      if (inv) generatePowerSourcePdf(inv);
     }
 
     async function deleteInvoice(invoiceNo) {
@@ -703,7 +708,8 @@
 
     // Number to words helper for Indian Currency
     function numberToWords(num) {
-      if (isNaN(num) || num === 0) return "Zero Rupees Only";
+      num = Number(num);
+      if (isNaN(num) || num === 0) return "INR Zero Rupees Only.";
       let a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
       let b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 
@@ -742,106 +748,153 @@
       
       let result = 'INR ' + str.trim() + ' Rupees';
       if (paise > 0) {
-        result += ' and ' + convert(paise) + ' Paise';
+        result += ' and ' + convert(paise).trim() + ' Paise';
       }
       return result + ' Only.';
     }
 
-    // Clean date formatter (removes time, outputs DD MMM YYYY)
-    function formatDateClean(dateStr) {
-      if (!dateStr) return '';
-      try {
-        let d = new Date(dateStr);
-        if (!isNaN(d.getTime())) {
-          let day = String(d.getDate()).padStart(2, '0');
-          let months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          let mon = months[d.getMonth()];
-          let yr = d.getFullYear();
-          return `${day} ${mon} ${yr}`;
+    // Strict Date-Only Formatter: Strips all time, timezone, or GMT strings completely
+    function formatDateClean(rawDate) {
+      if (!rawDate) return '';
+      let str = String(rawDate).trim();
+      
+      // Match YYYY-MM-DD directly
+      let isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) {
+        let months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        let yr = isoMatch[1];
+        let monIdx = parseInt(isoMatch[2], 10) - 1;
+        let day = isoMatch[3];
+        if (monIdx >= 0 && monIdx < 12) {
+          return `${day} ${months[monIdx]} ${yr}`;
         }
-      } catch(e) {}
-      return String(dateStr).split('T')[0].split(' ')[0];
+      }
+
+      // Match "Tue Apr 07 2026 00:00:00 GMT..." or similar JS Date strings
+      let jsDateMatch = str.match(/^[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})/);
+      if (jsDateMatch) {
+        let mon = jsDateMatch[1];
+        let day = jsDateMatch[2].padStart(2, '0');
+        let yr = jsDateMatch[3];
+        return `${day} ${mon} ${yr}`;
+      }
+
+      // Fallback using Date object
+      let d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        let day = String(d.getDate()).padStart(2, '0');
+        let months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        let mon = months[d.getMonth()];
+        let yr = d.getFullYear();
+        return `${day} ${mon} ${yr}`;
+      }
+
+      return str.split('T')[0].split(' 00:')[0];
     }
 
-    // POWER SOURCE Style PDF Generator matching the uploaded PDF format precisely
+    function formatDateForInput(rawDate) {
+      if (!rawDate) return '';
+      let str = String(rawDate).trim();
+      let isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+      let d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        let yr = d.getFullYear();
+        let mon = String(d.getMonth() + 1).padStart(2, '0');
+        let day = String(d.getDate()).padStart(2, '0');
+        return `${yr}-${mon}-${day}`;
+      }
+      return '';
+    }
+
+    // Helper to strip any accidental unicode superscripts or control characters from strings
+    function cleanText(val) {
+      if (val === null || val === undefined) return '';
+      return String(val)
+        .replace(/[¹²³⁰-⁹]/g, '') // Remove unicode superscripts ¹²³⁰-⁹
+        .replace(/[^ -~
+]/g, '') // Ensure pure standard ASCII characters so jsPDF Helvetica never renders odd glyphs
+        .trim();
+    }
+
+    // POWER SOURCE Style PDF Generator
     function generatePowerSourcePdf(inv) {
       const vendor = getVendorProfile();
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
-      let y = 12;
+      let y = 14;
       
       // Header: Power Source & GSTIN & TAX INVOICE title
       doc.setFont("helvetica", "bold");
       doc.setFontSize(14);
-      doc.text(vendor.name, 14, y);
+      doc.text(cleanText(vendor.name), 14, y);
       
-      doc.setFontSize(11);
-      doc.text("TAX INVOICE", 160, y, { align: "right" });
+      doc.setFontSize(12);
+      doc.text("TAX INVOICE", 196, y, { align: "right" });
       
       y += 5;
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      doc.text(`GSTIN: ${vendor.gstin}`, 14, y);
+      doc.text(`GSTIN: ${cleanText(vendor.gstin)}`, 14, y);
       
       y += 4;
-      // Vendor Address
-      const splitVendorAddr = doc.splitTextToSize(vendor.address, 110);
+      const splitVendorAddr = doc.splitTextToSize(cleanText(vendor.address), 115);
       doc.text(splitVendorAddr, 14, y);
       y += (splitVendorAddr.length * 4);
       
-      doc.text(`Mobile: ${vendor.phone}`, 14, y);
+      doc.text(`Mobile: ${cleanText(vendor.phone)}`, 14, y);
       if (vendor.email) {
         y += 4;
-        doc.text(`Email: ${vendor.email}`, 14, y);
+        doc.text(`Email: ${cleanText(vendor.email)}`, 14, y);
       }
 
-      y += 6;
+      y += 5;
       doc.setLineWidth(0.4);
       doc.line(14, y, 196, y);
       
       y += 6;
-      // Customer Details & Invoice Meta
+      // Left Column: Customer Details | Right Column: Invoice Metadata (Date Only - No Time)
       doc.setFont("helvetica", "bold");
       doc.text("Customer Details:", 14, y);
       
       doc.text("Invoice #:", 130, y);
       doc.setFont("helvetica", "normal");
-      doc.text(inv.invoiceNo, 165, y);
+      doc.text(cleanText(inv.invoiceNo), 162, y);
 
-      y += 4;
+      y += 4.5;
       doc.setFont("helvetica", "bold");
-      doc.text(inv.partyName, 14, y);
+      doc.text(cleanText(inv.partyName), 14, y);
       
       doc.setFont("helvetica", "bold");
       doc.text("Invoice Date:", 130, y);
       doc.setFont("helvetica", "normal");
-      doc.text(formatDateClean(inv.date), 165, y);
+      doc.text(cleanText(formatDateClean(inv.date)), 162, y);
 
-      y += 4;
+      y += 4.5;
       doc.setFont("helvetica", "bold");
-      doc.text(`GSTIN: ${inv.gstin || 'N/A'}`, 14, y);
+      doc.text(`GSTIN: ${cleanText(inv.gstin || 'N/A')}`, 14, y);
       
       doc.setFont("helvetica", "bold");
       doc.text("Place of Supply:", 130, y);
       doc.setFont("helvetica", "normal");
-      doc.text(inv.placeOfSupply || '27-MAHARASHTRA', 165, y);
+      doc.text(cleanText(inv.placeOfSupply || '27-MAHARASHTRA'), 162, y);
 
-      y += 4;
+      y += 4.5;
       doc.setFont("helvetica", "bold");
       doc.text("Billing Address:", 14, y);
       
       doc.setFont("helvetica", "bold");
       doc.text("Due Date:", 130, y);
       doc.setFont("helvetica", "normal");
-      doc.text(formatDateClean(inv.dueDate || inv.date), 165, y);
+      doc.text(cleanText(formatDateClean(inv.dueDate || inv.date)), 162, y);
 
-      y += 4;
-      const splitPartyAddr = doc.splitTextToSize(inv.partyAddress || 'Mumbai, Maharashtra', 105);
+      y += 4.5;
+      const splitPartyAddr = doc.splitTextToSize(cleanText(inv.partyAddress || 'Mumbai, Maharashtra'), 108);
       doc.setFont("helvetica", "normal");
       doc.text(splitPartyAddr, 14, y);
 
-      y += Math.max(splitPartyAddr.length * 4, 8);
+      y += Math.max(splitPartyAddr.length * 4, 7);
       
       // ORIGINAL FOR RECIPIENT & Reference
       doc.setFont("helvetica", "bold");
@@ -851,8 +904,8 @@
       if (inv.poReference) {
         doc.text("Reference:", 14, y);
         doc.setFont("helvetica", "normal");
-        const splitRef = doc.splitTextToSize(inv.poReference, 150);
-        doc.text(splitRef, 40, y);
+        const splitRef = doc.splitTextToSize(cleanText(inv.poReference), 150);
+        doc.text(splitRef, 36, y);
         y += (splitRef.length * 4) + 2;
       }
 
@@ -862,127 +915,142 @@
       doc.rect(14, y, 182, 7, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.text("#", 17, y + 4.5);
-      doc.text("Item", 26, y + 4.5);
-      doc.text("Rate/Item", 110, y + 4.5);
-      doc.text("Qty", 132, y + 4.5);
-      doc.text("Taxable Value", 148, y + 4.5);
-      doc.text("Amount", 176, y + 4.5);
+      doc.setFontSize(8.5);
+      doc.text("#", 17, y + 4.7);
+      doc.text("Item", 25, y + 4.7);
+      doc.text("Rate/Item", 104, y + 4.7);
+      doc.text("Qty", 131, y + 4.7);
+      doc.text("Taxable Value", 145, y + 4.7);
+      doc.text("Amount", 174, y + 4.7);
 
       y += 7;
       doc.setTextColor(0, 0, 0);
       doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
 
       let totalQtyCount = 0;
       (inv.items || []).forEach((it, i) => {
-        const itemDesc = (it.itemName || 'Item') + (it.hsn ? `\n(HSN code ${it.hsn})` : '');
-        const splitDesc = doc.splitTextToSize(itemDesc, 80);
-        const rowHeight = Math.max(8, splitDesc.length * 4 + 4);
-        totalQtyCount += Number(it.qty || 0);
+        const cleanName = cleanText(it.itemName || 'Item');
+        const cleanHsn = cleanText(it.hsn);
+        const itemDesc = cleanName + (cleanHsn ? `\n(HSN code ${cleanHsn})` : '');
+        const splitDesc = doc.splitTextToSize(itemDesc, 75);
+        const rowHeight = Math.max(9, splitDesc.length * 4 + 4);
+        
+        const qtyVal = Number(it.qty || 0);
+        const rateVal = Number(it.unitPrice || 0);
+        const taxableVal = Number(it.taxable || 0);
+        const afterTaxVal = Number(it.afterTax || 0);
+        
+        totalQtyCount += qtyVal;
 
         doc.text(String(i + 1), 17, y + 5);
-        doc.text(splitDesc, 26, y + 5);
-        doc.text(`Rs. ${(it.unitPrice || 0).toFixed(2)}`, 110, y + 5);
-        doc.text(String(it.qty || 0), 132, y + 5);
-        doc.text(`Rs. ${(it.taxable || 0).toFixed(2)}`, 148, y + 5);
-        doc.text(`Rs. ${(it.afterTax || 0).toFixed(2)}`, 176, y + 5);
+        doc.text(splitDesc, 25, y + 5);
+        doc.text(`Rs. ${rateVal.toFixed(2)}`, 104, y + 5);
+        doc.text(String(qtyVal), 131, y + 5);
+        doc.text(`Rs. ${taxableVal.toFixed(2)}`, 145, y + 5);
+        doc.text(`Rs. ${afterTaxVal.toFixed(2)}`, 174, y + 5);
 
         y += rowHeight;
         doc.setLineWidth(0.2);
         doc.line(14, y, 196, y);
       });
 
-      y += 4;
+      y += 5;
       doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
       doc.text(`Total Items / Qty: ${inv.items.length}/${totalQtyCount}`, 14, y);
 
-      // Save top of totals and left side for amount in words
       let totalsStartY = y + 6;
 
-      // Tax Breakdown Summary Box (Right Side)
+      // Right Side: Tax Breakdown Summary
       let summaryY = totalsStartY;
-      const halfGst = (inv.totalGst / 2).toFixed(2);
+      const totTaxable = Number(inv.totalTaxable || 0);
+      const totGst = Number(inv.totalGst || 0);
+      const grandTot = Number(inv.grandTotal || 0);
+      const halfGst = (totGst / 2).toFixed(2);
       
-      doc.text("Taxable Amount", 130, summaryY);
+      doc.setFont("helvetica", "bold");
+      doc.text("Taxable Amount", 128, summaryY);
       doc.setFont("helvetica", "normal");
-      doc.text(`Rs. ${(inv.totalTaxable || 0).toFixed(2)}`, 190, summaryY, { align: "right" });
+      doc.text(`Rs. ${totTaxable.toFixed(2)}`, 196, summaryY, { align: "right" });
 
       summaryY += 5;
       doc.setFont("helvetica", "bold");
-      doc.text("CGST 9.0%", 130, summaryY);
+      doc.text("CGST 9.0%", 128, summaryY);
       doc.setFont("helvetica", "normal");
-      doc.text(`Rs. ${halfGst}`, 190, summaryY, { align: "right" });
+      doc.text(`Rs. ${halfGst}`, 196, summaryY, { align: "right" });
 
       summaryY += 5;
       doc.setFont("helvetica", "bold");
-      doc.text("SGST 9.0%", 130, summaryY);
+      doc.text("SGST 9.0%", 128, summaryY);
       doc.setFont("helvetica", "normal");
-      doc.text(`Rs. ${halfGst}`, 190, summaryY, { align: "right" });
+      doc.text(`Rs. ${halfGst}`, 196, summaryY, { align: "right" });
 
-      summaryY += 6;
+      summaryY += 5;
       doc.setLineWidth(0.4);
       doc.line(125, summaryY, 196, summaryY);
 
       summaryY += 6;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text("Total", 130, summaryY);
-      doc.text(`Rs. ${(inv.grandTotal || 0).toFixed(2)}`, 190, summaryY, { align: "right" });
+      doc.text("Total", 128, summaryY);
+      doc.text(`Rs. ${grandTot.toFixed(2)}`, 196, summaryY, { align: "right" });
 
-      summaryY += 8;
-      doc.setFontSize(9);
-      doc.text("Amount Payable:", 130, summaryY);
-      doc.text(`Rs. ${(inv.grandTotal || 0).toFixed(2)}`, 190, summaryY, { align: "right" });
+      summaryY += 7;
+      doc.setFontSize(9.5);
+      doc.text("Amount Payable:", 128, summaryY);
+      doc.text(`Rs. ${grandTot.toFixed(2)}`, 196, summaryY, { align: "right" });
 
-      // Left Side: Amount in Words placed below Amount Payable area on left side
-      let wordsY = totalsStartY;
+      // Left Side: Amount in Words positioned clearly below Amount Payable level on left side
+      let wordsY = summaryY + 6;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8.5);
-      doc.text("Total amount (in words):", 14, wordsY);
-      wordsY += 4;
+      doc.text("Amount in Words:", 14, wordsY);
+      wordsY += 4.5;
       doc.setFont("helvetica", "normal");
-      const splitWords = doc.splitTextToSize(numberToWords(inv.grandTotal || 0), 105);
+      const splitWords = doc.splitTextToSize(cleanText(numberToWords(grandTot)), 175);
       doc.text(splitWords, 14, wordsY);
 
       // Bank Details & Signatory below
-      y = Math.max(summaryY + 12, wordsY + (splitWords.length * 4) + 8);
+      y = wordsY + (splitWords.length * 4) + 8;
+      doc.setLineWidth(0.2);
+      doc.line(14, y - 4, 196, y - 4);
       
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
       doc.text("Bank Details:", 14, y);
+      doc.text(`For ${cleanText(vendor.name)}`, 196, y, { align: "right" });
+
       y += 5;
       doc.setFont("helvetica", "normal");
-      doc.text(`Bank: ${vendor.bank}`, 14, y);
-      doc.text(`For ${vendor.name}`, 130, y);
+      doc.text(`Bank: ${cleanText(vendor.bank)}`, 14, y);
 
       y += 5;
-      doc.text(`Account #: ${vendor.accNo}`, 14, y);
+      doc.text(`Account #: ${cleanText(vendor.accNo)}`, 14, y);
 
       y += 5;
-      doc.text(`IFSC Code: ${vendor.ifsc}`, 14, y);
+      doc.text(`IFSC Code: ${cleanText(vendor.ifsc)}`, 14, y);
 
       y += 5;
-      const splitBranch = doc.splitTextToSize(`Branch: ${vendor.branch}`, 85);
+      const splitBranch = doc.splitTextToSize(`Branch: ${cleanText(vendor.branch)}`, 105);
       doc.text(splitBranch, 14, y);
-
-      y += 12;
+      
       doc.setFont("helvetica", "bold");
-      doc.text("Authorized Signatory", 155, y);
+      doc.text("Authorized Signatory", 196, y + 4, { align: "right" });
 
-      y += 6;
+      y += Math.max(splitBranch.length * 4, 6) + 6;
       doc.setFont("helvetica", "bold");
       doc.text("Notes:", 14, y);
-      y += 4;
+      y += 4.5;
       doc.setFont("helvetica", "normal");
-      doc.text(inv.invoiceNotes || "Thank you for your business.", 14, y);
+      doc.text(cleanText(inv.invoiceNotes || "Thank you for your business."), 14, y);
 
       y += 8;
       doc.setFontSize(8);
       doc.setTextColor(100, 100, 100);
       doc.text("This is a computer generated document and requires no signature.", 14, y);
 
-      doc.save(`Invoice_${inv.invoiceNo.replace(/\//g, '_')}.pdf`);
+      doc.save(`Invoice_${cleanText(inv.invoiceNo).replace(/\//g, '_')}.pdf`);
     }
 
     async function loadReport(type) {
