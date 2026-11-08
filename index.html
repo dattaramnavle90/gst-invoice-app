@@ -310,17 +310,52 @@
       return { totTaxable, totGst, totGrand };
     }
 
-    function resetForm() {
+   function resetForm() {
       document.getElementById('invNo').value = '';
+      document.getElementById('invNo').disabled = false;
       document.getElementById('invDate').valueAsDate = new Date();
+      
+      // Re-enable customer fields for new invoices
       document.getElementById('partyName').value = '';
+      document.getElementById('partyName').disabled = false;
       document.getElementById('gstin').value = '';
+      document.getElementById('gstin').disabled = false;
       document.getElementById('customerSelect').value = '';
+      document.getElementById('customerSelect').disabled = false;
+
       document.getElementById('formTitle').innerText = 'New Invoice Details';
       document.getElementById('cancelEditBtn').classList.add('hidden');
       document.getElementById('submitBtn').innerText = 'Submit Invoice to Sheet';
       items = [{ hsn: '', unitPrice: '', qty: 1, gstPercent: 18 }];
       renderItems();
+    }
+
+    function editInvoice(invNo) {
+      const inv = allInvoices.find(i => i.invoiceNo === invNo);
+      if (!inv) return;
+
+      document.getElementById('invNo').value = inv.invoiceNo;
+      document.getElementById('invDate').value = inv.date;
+      
+      // Load customer details but lock/disable them so they cannot be changed
+      document.getElementById('partyName').value = inv.partyName;
+      document.getElementById('partyName').disabled = true;
+      document.getElementById('gstin').value = inv.gstin;
+      document.getElementById('gstin').disabled = true;
+      document.getElementById('customerSelect').disabled = true;
+
+      items = inv.items.map(it => ({
+        hsn: it.hsn,
+        unitPrice: it.unitPrice,
+        qty: it.qty,
+        gstPercent: it.gstPercent
+      }));
+
+      document.getElementById('formTitle').innerText = `Editing Invoice: ${inv.invoiceNo} (Customer Locked)`;
+      document.getElementById('cancelEditBtn').classList.remove('hidden');
+      document.getElementById('submitBtn').innerText = 'Update Invoice in Sheet';
+      renderItems();
+      switchTab('entry');
     }
 
     function editInvoice(invNo) {
@@ -419,19 +454,7 @@
         `).join('');
     }
 
-    async function deleteInvoice(invoiceNo) {
-      if (!confirm(`Are you sure you want to delete Invoice ${invoiceNo}?`)) return;
-      const apiUrl = localStorage.getItem('gst_sheet_api_url');
-      try {
-        // Calls the dedicated delete action via POST URL parameter
-        const res = await fetch(`${apiUrl}?action=delete&invoiceNo=${encodeURIComponent(invoiceNo)}`, { method: 'POST' });
-        const result = await res.json();
-        if (result.status === 'success') {
-          alert('Deleted successfully!');
-          loadInvoices();
-        } else { throw new Error(result.message); }
-      } catch (err) { alert('Failed to delete: ' + err.message); }
-    }
+ 
 
     function generatePdf(inv) {
       const { jsPDF } = window.jspdf;
